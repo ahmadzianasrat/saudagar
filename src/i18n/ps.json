@@ -1,0 +1,18 @@
+{
+  "nav.ledger": "کاته",
+  "nav.inventory": "ذخيره",
+  "nav.prices": "بيې",
+  "nav.settings": "تنظیمات",
+  "ledger.totalBalance": "ټول بېلانس",
+  "ledger.given": "درکړل شوي",
+  "ledger.received": "اخيستل شوي",
+  "ledger.newEntry": "+ نوې ليکنه",
+  "ledger.synced": "همغږ شوی",
+  "ledger.pending": "په تمه",
+  "prices.today": "نننۍ بيه",
+  "subscription.monthly": "میاشتنی — ۲۵۰ افغانۍ",
+  "subscription.sixMonth": "۶ میاشتې — ۱۲۵۰ افغانۍ (~۱۷٪ سپما)",
+  "subscription.expired": "ستاسو اشتراک پای ته رسیدلی. تاسو کولی شئ خپلې معلومات وګورئ، خو د نوې ليکنې لپاره نوي کول اړین دي.",
+  "onboarding.requestAccess": "د لاسرسي غوښتنه",
+  "onboarding.pendingApproval": "ستاسو غوښتنه د تصویب په تمه ده."
+}

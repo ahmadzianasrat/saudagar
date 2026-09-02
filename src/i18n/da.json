@@ -1,0 +1,18 @@
+{
+  "nav.ledger": "کتاب",
+  "nav.inventory": "ذخیره",
+  "nav.prices": "قیمت‌ها",
+  "nav.settings": "تنظیمات",
+  "ledger.totalBalance": "بیلانس کل",
+  "ledger.given": "داده شده",
+  "ledger.received": "گرفته شده",
+  "ledger.newEntry": "+ ثبت جدید",
+  "ledger.synced": "همگام شد",
+  "ledger.pending": "در انتظار همگام‌سازی",
+  "prices.today": "قیمت امروز",
+  "subscription.monthly": "ماهانه — ۲۵۰ افغانی",
+  "subscription.sixMonth": "۶ ماهه — ۱۲۵۰ افغانی (حدود ۱۷٪ صرفه‌جویی)",
+  "subscription.expired": "اشتراک شما به پایان رسیده. می‌توانید اطلاعات خود را ببینید، اما برای ثبت جدید نیاز به تمدید است.",
+  "onboarding.requestAccess": "درخواست دسترسی",
+  "onboarding.pendingApproval": "درخواست شما در انتظار تایید است."
+}

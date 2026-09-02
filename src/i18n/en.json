@@ -1,0 +1,18 @@
+{
+  "nav.ledger": "Ledger",
+  "nav.inventory": "Inventory",
+  "nav.prices": "Prices",
+  "nav.settings": "Settings",
+  "ledger.totalBalance": "Total Balance",
+  "ledger.given": "Given (Credit)",
+  "ledger.received": "Received (Debit)",
+  "ledger.newEntry": "+ New Entry",
+  "ledger.synced": "Synced",
+  "ledger.pending": "Pending sync",
+  "prices.today": "Today's Price",
+  "subscription.monthly": "Monthly — 250 AFN",
+  "subscription.sixMonth": "6 Months — 1,250 AFN (save ~17%)",
+  "subscription.expired": "Your subscription has expired. You can view your data, but adding new entries requires renewal.",
+  "onboarding.requestAccess": "Request Access",
+  "onboarding.pendingApproval": "Your request is pending approval."
+}
