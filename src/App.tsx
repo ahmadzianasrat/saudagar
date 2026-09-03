@@ -1,23 +1,46 @@
+import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
+import RenewalBanner from "./components/RenewalBanner";
 import LedgerHome from "./features/ledger/LedgerHome";
 import InventoryHome from "./features/inventory/InventoryHome";
 import PricesHome from "./features/prices/PricesHome";
 import SubscriptionScreen from "./features/subscription/SubscriptionScreen";
 import RequestAccessScreen from "./features/profile/RequestAccessScreen";
+import LoginScreen from "./features/auth/LoginScreen";
+import { useAuth } from "./lib/useAuth";
+import { useSubscriptionStatus } from "./lib/useSubscriptionStatus";
 
-// TODO: replace with real Supabase auth-state check once auth is wired up.
-// This stub always treats the user as logged out, so the request-access
-// screen is what renders first when you start filling in real logic.
-const IS_AUTHENTICATED = false;
-
+// Real auth state, replacing the earlier IS_AUTHENTICATED stub.
 export default function App() {
-  if (!IS_AUTHENTICATED) {
-    return <RequestAccessScreen />;
+  const { session, isAuthenticated, loading } = useAuth();
+  const [showRequestAccess, setShowRequestAccess] = useState(false);
+  const subscriptionStatus = useSubscriptionStatus(session?.user.id);
+
+  if (loading) {
+    return <div style={{ padding: 16 }}>Loading…</div>;
+  }
+
+  if (!isAuthenticated) {
+    if (showRequestAccess) {
+      return <RequestAccessScreen />;
+    }
+    return (
+      <div>
+        <LoginScreen onLoggedIn={() => {}} />
+        <button
+          style={{ margin: "0 16px" }}
+          onClick={() => setShowRequestAccess(true)}
+        >
+          New here? Request access
+        </button>
+      </div>
+    );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      <RenewalBanner status={subscriptionStatus} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <Routes>
           <Route path="/" element={<Navigate to="/ledger" replace />} />
