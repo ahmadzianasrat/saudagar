@@ -39,9 +39,11 @@ see section 1 and 2.**
 - [x] Scaffolded as a fully separate Vite app under `admin-panel/`
 - [x] `AccountRequestsScreen.tsx` — approve/decline queue, calls the two new Edge Functions, shows generated credentials + a wa.me send-link on approval
 - [x] `PriceUploadScreen.tsx` — market + commodity picker filtered to the logged-in admin's `allowed_markets`, price entry form
+- [x] `AdminLoginScreen.tsx` — ordinary email/password login (admins are a small trusted population, don't need the shop-owner synthetic-email workaround)
+- [x] `useAdminAuth.ts` — checks for a matching `admin_users` row after login, not just a valid Supabase session; blocks access with a clear message if someone authenticates but has no admin row
+- [x] `App.tsx` — tabs now hide themselves based on the logged-in admin's actual permissions (`can_approve_accounts`, `allowed_markets`), rather than always showing both
 - [ ] Deploy this as its own hosted app (Vercel/Netlify/etc.) or run locally for now — not yet decided where this lives long-term
-- [ ] No login screen built for the admin panel itself yet — currently assumes an already-authenticated Supabase session; needs its own simple login form (can reuse the main app's phone+password pattern, or just use email/password directly for admins since they're not the same trust-sensitive population as end users)
-- [ ] Manually create your own `admin_users` row (role='super_admin', can_approve_accounts=true, allowed_markets=[your launch market id]) — nothing in the UI creates the first admin, that has to be done directly in the Supabase dashboard once
+- [x] Your own super_admin row — created manually via Supabase SQL Editor per the auth.users-first fix (create a real Auth user in the Dashboard, then insert into admin_users using that user's UUID and `ARRAY[...]::uuid[]` for allowed_markets)
 
 ## 5. Core app screens — IMPLEMENTED, needs real-device testing
 - [x] `LedgerHome.tsx` — real balance summary, given/received cards, entry list with per-entry synced/pending indicator, new-entry form (including inline new-contact creation) wired to `enqueueWrite`
