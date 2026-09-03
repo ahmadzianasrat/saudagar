@@ -1,4 +1,4 @@
 .env
 .env .local
-node-modules
+node_modules
 dist

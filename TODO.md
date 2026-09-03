@@ -24,13 +24,15 @@ Nothing deployed yet.
 ---
 
 ## 2. HesabPay integration — close the remaining gaps
-- [ ] Deploy `create-payment-session` and `hesabpay-webhook` Edge Functions (`supabase functions deploy ...`)
-- [ ] Set `HESABPAY_API_KEY` as a Supabase secret
-- [ ] Register the webhook endpoint URL on HesabPay's dashboard (the screen you already found), select both **Payment Success** and **Payment Failure** events
-- [ ] Capture and store the signing secret HesabPay shows (if any) as `HESABPAY_WEBHOOK_SECRET`
-- [ ] Fetch the actual **Webhooks** documentation page (sidebar link, not yet pulled) for the authoritative payload schema + signature method — replace the guessed logic in `hesabpay-webhook/index.ts`
-- [ ] Run one real test transaction; log the raw webhook payload and headers; update the field-matching logic in `hesabpay-webhook/index.ts` accordingly
-- [ ] Ask HesabPay support whether a sandbox/test mode exists, so you're not debugging with real AFN
+- [x] Webhook payload structure confirmed (`status_code`, `success`, `sender_account`, `transaction_id`, `amount`, `memo`, `signature`, `timestamp`, `transaction_date`, `items`, `email`)
+- [x] Signature verification method confirmed: POST `{signature, timestamp}` (from the payload) to `https://api.hesab.com/api/v1/hesab/webhooks/verify-signature` with `Authorization: API-KEY <key>`, check `response.success === true`
+- [x] `hesabpay-webhook/index.ts` rewritten to match — matches sessions via `items[0].id`, verifies signature properly, checks amount matches before activating a subscription
+- [x] Webhook endpoints registered on HesabPay's dashboard for both Payment Success and Payment Failure events, pointing at the deployed Supabase function URL
+- [ ] Deploy the corrected `create-payment-session` and `hesabpay-webhook` Edge Functions (`supabase functions deploy ...`) — code is fixed locally but not yet pushed
+- [ ] Set `HESABPAY_API_KEY` as a Supabase secret if not already done
+- [ ] Run one real test transaction end-to-end; confirm the webhook actually lands, passes verification, and creates a `subscriptions` row with the correct `expires_at`
+- [ ] Test a **failed** payment specifically (not just success) — confirm `payment_sessions.status` correctly flips to `failed` and no subscription is created
+- [ ] Ask HesabPay support whether a sandbox/test mode exists, so you're not testing with real AFN
 - [ ] Confirm whether `create-session`'s `email` field is required in practice even though docs mark it optional (test with and without)
 
 ---

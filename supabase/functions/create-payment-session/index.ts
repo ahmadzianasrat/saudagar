@@ -113,18 +113,16 @@ serve(async (req) => {
       });
     }
 
-    // Confirmed response shape: { success, payment_url, message }.
-    // HesabPay's docs don't show a distinct "session_id" field in the
-    // create-session response — payment_url itself may embed one. If so,
-    // parse it out here once you've seen a real response; for now we rely
-    // on our own session.id (sent as items[0].id) as the primary reference.
+    // Response shape confirmed against HesabPay's docs: { success, payment_url, message }.
+    // No session id is returned at creation — the only reliable reference
+    // back to this row is items[0].id (= session.id), which HesabPay
+    // echoes back unchanged in the webhook payload. Confirmed working
+    // end-to-end against the real Webhooks documentation.
     const sessionUrl = hesabData?.payment_url;
-    const hesabSessionId = hesabData?.session_id ?? null;
 
     await supabase
       .from("payment_sessions")
       .update({
-        hesabpay_session_id: hesabSessionId,
         session_url: sessionUrl,
         raw_create_response: hesabData,
       })
