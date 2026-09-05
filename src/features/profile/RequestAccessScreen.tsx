@@ -9,17 +9,34 @@ import { useTranslation } from "../../i18n/useTranslation";
 export default function RequestAccessScreen() {
   const { tr } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ ownerName: "", shopName: "", phoneNumber: "" });
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setError(null);
+    setLoading(true);
+
     // TODO: also collect market_id once a market picker exists — for
     // launch with a single market this can default to that market's id.
-    await supabase.from("account_requests").insert({
+    const { error: insertError } = await supabase.from("account_requests").insert({
       owner_name: form.ownerName,
       shop_name: form.shopName,
       phone_number: form.phoneNumber,
     });
+
+    setLoading(false);
+
+    // Previously this didn't check for an error at all, so a silently
+    // failed insert (e.g. an RLS policy blocking it) still showed the
+    // "pending approval" success message with nothing actually saved.
+    if (insertError) {
+      console.error("account_requests insert failed:", insertError);
+      setError("Something went wrong submitting your request. Please try again.");
+      return;
+    }
+
     setSubmitted(true);
   }
 
@@ -34,6 +51,7 @@ export default function RequestAccessScreen() {
   return (
     <form onSubmit={handleSubmit} style={{ padding: 16, display: "grid", gap: 8 }}>
       <h2>{tr("onboarding.requestAccess")}</h2>
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
       <input
         placeholder={tr("onboarding.ownerName")}
         value={form.ownerName}
@@ -49,7 +67,9 @@ export default function RequestAccessScreen() {
         value={form.phoneNumber}
         onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
       />
-      <button type="submit">{tr("onboarding.submit")}</button>
+      <button type="submit" disabled={loading}>
+        {loading ? "..." : tr("onboarding.submit")}
+      </button>
     </form>
   );
 }
