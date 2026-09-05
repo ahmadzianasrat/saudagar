@@ -73,7 +73,7 @@ export default function InventoryHome() {
     setItems(withPrices);
   }
 
-  async function handleAddTransaction(itemId: string, commodityId: string) {
+  async function handleAddTransaction(itemId: string) {
     if (!profileId || !txQuantity) return;
     const clientId = generateClientId();
     const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
@@ -141,7 +141,7 @@ export default function InventoryHome() {
               {txType === "purchase" && (
                 <input placeholder="Unit cost" type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
               )}
-              <button onClick={() => handleAddTransaction(item.id, item.commodity_id)}>Save</button>
+              <button onClick={() => handleAddTransaction(item.id)}>Save</button>
             </div>
           )}
         </div>

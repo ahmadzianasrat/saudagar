@@ -12,7 +12,7 @@ const TABS = [
 // translation-loading utility exists (src/i18n/*.json are in place,
 // just need a t() helper reading the active language from context).
 export default function BottomNav() {
-  const { language } = useLanguage();
+  useLanguage(); // subscribes to language changes so this re-renders once i18n lookup is wired in (see TODO)
 
   return (
     <nav style={{ display: "flex", borderTop: "1px solid #ddd", padding: "8px 0" }}>

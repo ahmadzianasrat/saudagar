@@ -1,3 +1,4 @@
+import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
@@ -81,7 +82,7 @@ export default function LedgerHome() {
   const given = entries.filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
   const received = entries.filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
 
-  async function handleAddEntry(e: React.FormEvent) {
+  async function handleAddEntry(e: FormEvent) {
     e.preventDefault();
     if (!profileId || !amount) return;
 

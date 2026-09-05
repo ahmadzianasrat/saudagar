@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SubscriptionStatus } from "../lib/useSubscriptionStatus";
 import { shouldShowRenewalBanner } from "../lib/useSubscriptionStatus";
@@ -36,7 +37,7 @@ export default function RenewalBanner({ status }: { status: SubscriptionStatus }
   return null;
 }
 
-function bannerStyle(bg: string, fg: string): React.CSSProperties {
+function bannerStyle(bg: string, fg: string): CSSProperties {
   return {
     background: bg,
     color: fg,

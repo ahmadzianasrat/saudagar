@@ -1,3 +1,4 @@
+import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -51,7 +52,7 @@ export default function PriceUploadScreen() {
     setCommodities(commodityRows ?? []);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setStatus(null);
 

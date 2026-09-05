@@ -1,3 +1,4 @@
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -9,7 +10,7 @@ export default function RequestAccessScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ ownerName: "", shopName: "", phoneNumber: "" });
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     // TODO: also collect market_id once a market picker exists — for
     // launch with a single market this can default to that market's id.
