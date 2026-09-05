@@ -111,3 +111,13 @@ see section 1 and 2.**
 - [ ] Your manual native-review pass on the Pashto/Dari policy translations AND the newly expanded Pashto/Dari UI strings in `ps.json`/`da.json` — these are machine-assisted drafts like the policy content was, same caveat applies now that there's a lot more of them
 - [ ] Admin panel change-password screen (optional, not urgent)
 - [ ] Force-password-change-on-first-login (optional, not urgent)
+
+
+---
+
+## 14. CORS + error-handling fixes (this round)
+- [x] **CORS headers added** to `admin-approve-account`, `admin-decline-account`, and `create-payment-session` — these are called directly from the browser (admin panel / main app, both hosted on Vercel, different origins than the Supabase functions URL), and none of them had `Access-Control-Allow-Origin` set. This is almost certainly why clicking Approve left both buttons stuck gray: the browser's fetch() call failed before your function code ever ran, and `AccountRequestsScreen` didn't have a `finally` block to reset the busy state when that happened.
+- [x] **`AccountRequestsScreen.tsx` rewritten** — approve/decline now wrapped in try/catch/finally, so a failed request always resets the button state and shows a visible error message instead of getting stuck silently.
+- [x] **`RequestAccessScreen.tsx` fixed** (previous round) — now checks the insert's error before showing "pending approval."
+- [ ] **Redeploy required**: `admin-approve-account`, `admin-decline-account`, `create-payment-session` — all three need `supabase functions deploy <name>` again for the CORS fix to take effect
+- [ ] Retry the approve flow after redeploying — the temp password will appear directly in the admin panel's UI on success (this is also the answer to "how do I get a password" — it's generated automatically on approval, never chosen by the user)

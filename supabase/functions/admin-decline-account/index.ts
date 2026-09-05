@@ -7,9 +7,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405 });
+    return jsonResponse({ error: "method_not_allowed" }, 405);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -20,7 +36,7 @@ serve(async (req) => {
       authHeader.replace("Bearer ", "")
     );
     if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+      return jsonResponse({ error: "unauthorized" }, 401);
     }
 
     const { data: admin } = await supabase
@@ -30,12 +46,12 @@ serve(async (req) => {
       .single();
 
     if (!admin || !admin.can_approve_accounts) {
-      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+      return jsonResponse({ error: "forbidden" }, 403);
     }
 
     const { request_id, reason } = await req.json();
     if (!request_id) {
-      return new Response(JSON.stringify({ error: "missing_request_id" }), { status: 400 });
+      return jsonResponse({ error: "missing_request_id" }, 400);
     }
 
     await supabase
@@ -52,9 +68,9 @@ serve(async (req) => {
     // if you want to keep a record of why a request was declined.
     void reason;
 
-    return new Response(JSON.stringify({ status: "declined" }), { status: 200 });
+    return jsonResponse({ status: "declined" });
   } catch (err) {
     console.error("admin-decline-account error:", err);
-    return new Response(JSON.stringify({ error: "internal_error" }), { status: 500 });
+    return jsonResponse({ error: "internal_error" }, 500);
   }
 });

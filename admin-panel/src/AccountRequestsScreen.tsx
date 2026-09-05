@@ -14,17 +14,24 @@ export default function AccountRequestsScreen() {
   const [requests, setRequests] = useState<AccountRequest[]>([]);
   const [approvedCreds, setApprovedCreds] = useState<Record<string, { phone: string; password: string }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     load();
   }, []);
 
   async function load() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("account_requests")
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("failed to load account_requests:", error);
+      setActionError("Couldn't load requests — check the browser console for details.");
+      return;
+    }
     setRequests(data ?? []);
   }
 
@@ -36,34 +43,68 @@ export default function AccountRequestsScreen() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
-    return response.json();
+
+    // A non-OK response might not even be JSON (e.g. a CORS rejection
+    // never reaches our function at all, or a gateway error page) —
+    // guard the parse so a malformed response doesn't throw and skip
+    // past the finally block that resets the busy state.
+    let result: any;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error(`Unexpected response (status ${response.status}) — check that the ${name} function is deployed and CORS is configured.`);
+    }
+
+    if (!response.ok && !result?.error) {
+      throw new Error(`Request failed (status ${response.status})`);
+    }
+    return result;
   }
 
   async function approve(request: AccountRequest) {
     setBusyId(request.id);
-    const result = await callFunction("admin-approve-account", { request_id: request.id });
-    setBusyId(null);
+    setActionError(null);
+    try {
+      const result = await callFunction("admin-approve-account", { request_id: request.id });
 
-    if (result.error) {
-      alert(`Approval failed: ${result.error}`);
-      return;
+      if (result.error) {
+        setActionError(`Approval failed: ${result.error}`);
+        return;
+      }
+
+      // Show the generated credentials so the admin can relay them —
+      // by phone call or wa.me link — per the manual-verification /
+      // manual-credential-delivery flow decided on earlier.
+      setApprovedCreds((prev) => ({
+        ...prev,
+        [request.id]: { phone: result.login_phone, password: result.temp_password },
+      }));
+      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      // Previously an error here (e.g. a CORS-blocked fetch throwing)
+      // skipped straight past setBusyId(null), leaving both buttons
+      // stuck disabled indefinitely with no visible explanation. The
+      // finally block below guarantees that can't happen again, and
+      // this catch surfaces the actual error instead of silence.
+      console.error("approve() failed:", err);
+      setActionError(err instanceof Error ? err.message : "Something went wrong approving this request.");
+    } finally {
+      setBusyId(null);
     }
-
-    // Show the generated credentials so the admin can relay them —
-    // by phone call or wa.me link — per the manual-verification /
-    // manual-credential-delivery flow decided on earlier.
-    setApprovedCreds((prev) => ({
-      ...prev,
-      [request.id]: { phone: result.login_phone, password: result.temp_password },
-    }));
-    setRequests((prev) => prev.filter((r) => r.id !== request.id));
   }
 
   async function decline(request: AccountRequest) {
     setBusyId(request.id);
-    await callFunction("admin-decline-account", { request_id: request.id });
-    setBusyId(null);
-    setRequests((prev) => prev.filter((r) => r.id !== request.id));
+    setActionError(null);
+    try {
+      await callFunction("admin-decline-account", { request_id: request.id });
+      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      console.error("decline() failed:", err);
+      setActionError(err instanceof Error ? err.message : "Something went wrong declining this request.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function waLink(phone: string, password: string) {
@@ -76,6 +117,9 @@ export default function AccountRequestsScreen() {
   return (
     <div style={{ padding: 16 }}>
       <h2>Pending Requests ({requests.length})</h2>
+      {actionError && (
+        <p style={{ color: "crimson", background: "#fdecea", padding: 8, borderRadius: 6 }}>{actionError}</p>
+      )}
 
       {Object.entries(approvedCreds).map(([id, cred]) => (
         <div key={id} style={{ background: "#e8f5e9", padding: 10, borderRadius: 8, marginBottom: 8 }}>

@@ -22,6 +22,13 @@
 // Also creates the 30-day free trial subscription immediately on
 // approval, so a newly approved shop can start using the ledger/
 // inventory right away without a separate "start trial" step.
+//
+// CORS: this is called directly from the browser (admin-panel's
+// Vercel-hosted origin), so every response — not just the OPTIONS
+// preflight — needs Access-Control-Allow-Origin, or the browser
+// rejects the response before the app's code ever sees it. Without
+// this, fetch() throws, and any caller not wrapping that in a
+// try/catch/finally can end up stuck in a permanent "loading" state.
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -31,11 +38,20 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TRIAL_DAYS = 30;
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
 function generatePassword(): string {
-  // Simple readable password: 8 random alphanumeric chars. Good enough
-  // given it's relayed once by phone/WhatsApp and the user isn't
-  // expected to memorize it long-term (add a "change password" screen
-  // later if you want users to set their own).
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
@@ -46,20 +62,22 @@ function phoneToSyntheticEmail(phone: string): string {
 }
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405 });
+    return jsonResponse({ error: "method_not_allowed" }, 405);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // 1. Identify the calling admin and check permission.
     const authHeader = req.headers.get("Authorization") ?? "";
     const { data: userData, error: userErr } = await supabase.auth.getUser(
       authHeader.replace("Bearer ", "")
     );
     if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+      return jsonResponse({ error: "unauthorized" }, 401);
     }
 
     const { data: admin, error: adminErr } = await supabase
@@ -69,15 +87,14 @@ serve(async (req) => {
       .single();
 
     if (adminErr || !admin || !admin.can_approve_accounts) {
-      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+      return jsonResponse({ error: "forbidden" }, 403);
     }
 
     const { request_id } = await req.json();
     if (!request_id) {
-      return new Response(JSON.stringify({ error: "missing_request_id" }), { status: 400 });
+      return jsonResponse({ error: "missing_request_id" }, 400);
     }
 
-    // 2. Load the pending request.
     const { data: request, error: reqErr } = await supabase
       .from("account_requests")
       .select("*")
@@ -86,12 +103,9 @@ serve(async (req) => {
       .single();
 
     if (reqErr || !request) {
-      return new Response(JSON.stringify({ error: "request_not_found_or_not_pending" }), {
-        status: 404,
-      });
+      return jsonResponse({ error: "request_not_found_or_not_pending" }, 404);
     }
 
-    // 3. Create the auth user (synthetic email + generated password).
     const tempPassword = generatePassword();
     const syntheticEmail = phoneToSyntheticEmail(request.phone_number);
 
@@ -104,12 +118,9 @@ serve(async (req) => {
 
     if (createErr || !newUser?.user) {
       console.error("auth user creation failed", createErr);
-      return new Response(JSON.stringify({ error: "user_creation_failed", detail: createErr?.message }), {
-        status: 500,
-      });
+      return jsonResponse({ error: "user_creation_failed", detail: createErr?.message }, 500);
     }
 
-    // 4. Create the profile.
     const { error: profileErr } = await supabase.from("profiles").insert({
       id: newUser.user.id,
       phone_number: request.phone_number,
@@ -121,11 +132,9 @@ serve(async (req) => {
 
     if (profileErr) {
       console.error("profile creation failed", profileErr);
-      return new Response(JSON.stringify({ error: "profile_creation_failed" }), { status: 500 });
+      return jsonResponse({ error: "profile_creation_failed" }, 500);
     }
 
-    // 5. Create the 30-day trial subscription so the new shop can use
-    // the app immediately.
     const trialExpiresAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { error: trialErr } = await supabase.from("subscriptions").insert({
       profile_id: newUser.user.id,
@@ -141,25 +150,19 @@ serve(async (req) => {
       // created manually if this step fails. Log and continue.
     }
 
-    // 6. Mark the request approved.
     await supabase
       .from("account_requests")
       .update({ status: "approved", reviewed_by: admin.id, reviewed_at: new Date().toISOString() })
       .eq("id", request_id);
 
-    // Return the credentials for the admin to relay manually — never
-    // logged or stored anywhere beyond this response.
-    return new Response(
-      JSON.stringify({
-        status: "approved",
-        login_phone: request.phone_number,
-        temp_password: tempPassword,
-        trial_expires_at: trialExpiresAt,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return jsonResponse({
+      status: "approved",
+      login_phone: request.phone_number,
+      temp_password: tempPassword,
+      trial_expires_at: trialExpiresAt,
+    });
   } catch (err) {
     console.error("admin-approve-account error:", err);
-    return new Response(JSON.stringify({ error: "internal_error" }), { status: 500 });
+    return jsonResponse({ error: "internal_error" }, 500);
   }
 });

@@ -32,9 +32,27 @@ const TIER_PRICING: Record<string, { amount: number; days: number; label: string
   six_month: { amount: 1250, days: 182, label: "Saudagar — 6-month subscription" },
 };
 
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405 });
+    return jsonResponse({ error: "method_not_allowed" }, 405);
   }
 
   try {
@@ -46,14 +64,14 @@ serve(async (req) => {
       authHeader.replace("Bearer ", "")
     );
     if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+      return jsonResponse({ error: "unauthorized" }, 401);
     }
     const profileId = userData.user.id;
 
     const body = await req.json();
     const tier = body?.tier as string;
     if (!tier || !(tier in TIER_PRICING)) {
-      return new Response(JSON.stringify({ error: "invalid_tier" }), { status: 400 });
+      return jsonResponse({ error: "invalid_tier" }, 400);
     }
     const { amount, label } = TIER_PRICING[tier];
 
@@ -72,7 +90,7 @@ serve(async (req) => {
       .single();
 
     if (sessionErr || !session) {
-      return new Response(JSON.stringify({ error: "session_create_failed" }), { status: 500 });
+      return jsonResponse({ error: "session_create_failed" }, 500);
     }
 
     // 2. Call HesabPay to create the actual payment session.
@@ -108,9 +126,7 @@ serve(async (req) => {
         .update({ status: "failed", raw_create_response: hesabData })
         .eq("id", session.id);
 
-      return new Response(JSON.stringify({ error: "hesabpay_create_failed", detail: hesabData }), {
-        status: 502,
-      });
+      return jsonResponse({ error: "hesabpay_create_failed", detail: hesabData }, 502);
     }
 
     // Response shape confirmed against HesabPay's docs: { success, payment_url, message }.
@@ -128,12 +144,9 @@ serve(async (req) => {
       })
       .eq("id", session.id);
 
-    return new Response(
-      JSON.stringify({ session_id: session.id, payment_url: sessionUrl }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return jsonResponse({ session_id: session.id, payment_url: sessionUrl });
   } catch (err) {
     console.error("create-payment-session error:", err);
-    return new Response(JSON.stringify({ error: "internal_error" }), { status: 500 });
+    return jsonResponse({ error: "internal_error" }, 500);
   }
 });
