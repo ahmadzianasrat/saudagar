@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useTranslation } from "../../i18n/useTranslation";
 
 interface Market {
   id: string;
@@ -21,6 +22,7 @@ interface PriceRow {
 // today and more get added as the admin panel uploads them.
 export default function PricesHome() {
   const { formatNumber } = useLanguage();
+  const { tr } = useTranslation();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<string>("");
   const [prices, setPrices] = useState<PriceRow[]>([]);
@@ -62,7 +64,7 @@ export default function PricesHome() {
 
   return (
     <div style={{ padding: 16 }}>
-      <h2>Today's Prices</h2>
+      <h2>{tr("prices.today")}</h2>
 
       {markets.length > 1 && (
         <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)} style={{ marginBottom: 12 }}>
@@ -72,7 +74,7 @@ export default function PricesHome() {
         </select>
       )}
 
-      {prices.length === 0 && <p style={{ color: "#888" }}>No prices uploaded yet for this market.</p>}
+      {prices.length === 0 && <p style={{ color: "#888" }}>{tr("prices.none")}</p>}
 
       {prices.map((p) => (
         <div key={p.commodity_id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #eee" }}>

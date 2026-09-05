@@ -51,8 +51,8 @@ see section 1 and 2.**
 - [x] `PricesHome.tsx` — market-grouped price list, market picker (currently only shows the picker UI once more than one market exists)
 - [x] `SubscriptionScreen.tsx` — unchanged from before, already calls `create-payment-session`
 - [x] `RenewalBanner.tsx` — shows 5 days before expiry (`RENEWAL_WARNING_DAYS = 5` in `useSubscriptionStatus.ts`), and a separate read-only notice once actually expired
-- [ ] **i18n string lookup still not wired** — `BottomNav.tsx` and all new screens use hardcoded English text, not the `en.json`/`ps.json`/`da.json` files. Needs a `t(key, language)` helper built and threaded through every screen — this is the single biggest piece of "looks done but isn't" work remaining
-- [ ] Language/format settings screen (language switch + digit style + thousand separator toggle) — `LanguageContext` supports all of this already, no UI screen exists to control it yet
+- [x] **i18n string lookup — DONE.** `src/i18n/index.ts` (the `t()` function with English fallback + `{var}` interpolation) and `src/i18n/useTranslation.ts` (the `useTranslation()` hook bound to `LanguageContext`) now exist, and every screen — `BottomNav`, `LedgerHome`, `InventoryHome`, `PricesHome`, `SubscriptionScreen`, `LoginScreen`, `RequestAccessScreen`, `RenewalBanner`, `App.tsx` — pulls its text from `tr("some.key")` instead of hardcoded English. Translation files (`en.json`/`ps.json`/`da.json`) were expanded from ~9 keys to ~70 to cover every screen.
+- [x] **Language/format settings screen — DONE.** `src/features/settings/SettingsScreen.tsx` — language switch (ps/da/en), digit-style toggle, thousand-separator checkbox, plus links to Manage Subscription and Change Password, plus Log Out. Reachable via the bottom nav's 4th tab, which — this was a pre-existing bug, now fixed — previously pointed at `/subscription` despite being labeled "Settings."
 - [ ] WhatsApp "send today's entries" export button — discussed earlier, not yet built
 - [ ] Test the whole ledger/inventory flow on an actual Android device, not just desktop browser — touch targets, RTL rendering, and offline behavior all need real-device verification
 
@@ -92,7 +92,22 @@ see section 1 and 2.**
 
 ---
 
-## Newly surfaced items from this round (not yet decided)
-- [ ] Where/how the admin panel gets deployed and who else besides you gets a login to it
-- [ ] Whether admin-issued temp passwords should be forced to change on first login (not currently enforced)
-- [ ] The i18n lookup gap (section 5) is the most consequential thing left — worth prioritizing before any of the language/UI decisions feel "real" in the running app
+## 13. Change password screen — NEW, IMPLEMENTED
+- [x] `src/features/settings/ChangePasswordScreen.tsx` — re-verifies the CURRENT password via a fresh `signInWithPassword` call before allowing a change (not just relying on an existing session), specifically because admin-issued passwords are shared once via WhatsApp and devices may stay logged in long-term
+- [x] Reachable from Settings → Change Password
+- [ ] No equivalent screen built for the admin panel yet — admins still change password only via the Supabase Dashboard directly. Add one later if this becomes friction for your price-uploader or other admins.
+- [ ] Still not enforced: forcing a password change on first login for admin-issued credentials — the change-password screen exists, but nothing requires using it
+
+---
+
+## Both Vercel projects are live
+- Main app: https://saudagar-tan.vercel.app/
+- Admin panel: https://saudagar-4bgv.vercel.app/
+
+## Remaining open items
+- [ ] Real-device testing (section 5/6) — still not done, now more meaningful to do since the UI is actually translated
+- [ ] WhatsApp "send today's entries" export button — not yet built
+- [ ] In-app screen displaying the policy content — markdown files exist in `content/policies/`, not routed into the app yet
+- [ ] Your manual native-review pass on the Pashto/Dari policy translations AND the newly expanded Pashto/Dari UI strings in `ps.json`/`da.json` — these are machine-assisted drafts like the policy content was, same caveat applies now that there's a lot more of them
+- [ ] Admin panel change-password screen (optional, not urgent)
+- [ ] Force-password-change-on-first-login (optional, not urgent)

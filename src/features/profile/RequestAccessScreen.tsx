@@ -1,12 +1,13 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { useTranslation } from "../../i18n/useTranslation";
 
-// STUB — the "request access" onboarding flow decided on earlier:
-// shop owner submits basic info, an admin reviews and approves/declines
+// Shop owner submits basic info, an admin reviews and approves/declines
 // from the separate admin panel. No account exists in `profiles` until
 // approved — this only writes to `account_requests`.
 export default function RequestAccessScreen() {
+  const { tr } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ ownerName: "", shopName: "", phoneNumber: "" });
 
@@ -25,30 +26,30 @@ export default function RequestAccessScreen() {
   if (submitted) {
     return (
       <div style={{ padding: 16 }}>
-        <p>Your request is pending approval.</p>
+        <p>{tr("onboarding.pendingApproval")}</p>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} style={{ padding: 16, display: "grid", gap: 8 }}>
-      <h2>Request Access</h2>
+      <h2>{tr("onboarding.requestAccess")}</h2>
       <input
-        placeholder="Owner name"
+        placeholder={tr("onboarding.ownerName")}
         value={form.ownerName}
         onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
       />
       <input
-        placeholder="Shop name"
+        placeholder={tr("onboarding.shopName")}
         value={form.shopName}
         onChange={(e) => setForm({ ...form, shopName: e.target.value })}
       />
       <input
-        placeholder="Phone number"
+        placeholder={tr("ledger.phoneNumber")}
         value={form.phoneNumber}
         onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
       />
-      <button type="submit">Submit</button>
+      <button type="submit">{tr("onboarding.submit")}</button>
     </form>
   );
 }

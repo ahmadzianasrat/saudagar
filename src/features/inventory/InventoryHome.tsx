@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useTranslation } from "../../i18n/useTranslation";
 
 interface Commodity {
   id: string;
@@ -26,6 +27,7 @@ interface InventoryItem {
 // not just a standalone price list.
 export default function InventoryHome() {
   const { formatNumber } = useLanguage();
+  const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [commodities, setCommodities] = useState<Commodity[]>([]);
@@ -111,7 +113,7 @@ export default function InventoryHome() {
 
   return (
     <div style={{ padding: 16 }}>
-      <h2>Inventory</h2>
+      <h2>{tr("inventory.title")}</h2>
 
       {items.map((item) => (
         <div key={item.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12, marginBottom: 10 }}>
@@ -120,35 +122,35 @@ export default function InventoryHome() {
             <span>{formatNumber(item.quantity)} {item.unit}</span>
           </div>
           <div style={{ fontSize: 12, color: "#888" }}>
-            Avg cost: {formatNumber(item.avg_cost_per_unit)} / {item.unit} · Total: {formatNumber(item.total_cost)}
+            {tr("inventory.avgCost")}: {formatNumber(item.avg_cost_per_unit)} / {item.unit} · {tr("inventory.total")}: {formatNumber(item.total_cost)}
           </div>
           {item.todayPrice !== null && (
             <div style={{ fontSize: 12, color: "#1e6f5c", marginTop: 4 }}>
-              Today's price: {formatNumber(item.todayPrice ?? 0)} — value at market: {formatNumber((item.todayPrice ?? 0) * item.quantity)}
+              {tr("inventory.todayPrice")}: {formatNumber(item.todayPrice ?? 0)} — {tr("inventory.valueAtMarket")}: {formatNumber((item.todayPrice ?? 0) * item.quantity)}
             </div>
           )}
           <button style={{ marginTop: 8 }} onClick={() => setShowAddTransaction(item.id)}>
-            + Record purchase/sale
+            {tr("inventory.addTransaction")}
           </button>
           {showAddTransaction === item.id && (
             <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
               <select value={txType} onChange={(e) => setTxType(e.target.value as any)}>
-                <option value="purchase">Purchase</option>
-                <option value="sale">Sale</option>
-                <option value="adjustment">Adjustment</option>
+                <option value="purchase">{tr("inventory.purchase")}</option>
+                <option value="sale">{tr("inventory.sale")}</option>
+                <option value="adjustment">{tr("inventory.adjustment")}</option>
               </select>
-              <input placeholder="Quantity" type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} />
+              <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} />
               {txType === "purchase" && (
-                <input placeholder="Unit cost" type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
+                <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
               )}
-              <button onClick={() => handleAddTransaction(item.id)}>Save</button>
+              <button onClick={() => handleAddTransaction(item.id)}>{tr("inventory.save")}</button>
             </div>
           )}
         </div>
       ))}
 
       <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>Add a commodity to track</div>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("inventory.addCommodity")}</div>
         {commodities
           .filter((c) => !items.some((i) => i.commodity_id === c.id))
           .map((c) => (

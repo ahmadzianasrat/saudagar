@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SubscriptionStatus } from "../lib/useSubscriptionStatus";
 import { shouldShowRenewalBanner } from "../lib/useSubscriptionStatus";
+import { useTranslation } from "../i18n/useTranslation";
 
 // Two distinct states, per earlier decisions:
 //   - 0–5 days left: renewal warning, ledger/inventory still fully usable
@@ -10,6 +11,7 @@ import { shouldShowRenewalBanner } from "../lib/useSubscriptionStatus";
 //     this banner is about clarity, not the actual enforcement.
 export default function RenewalBanner({ status }: { status: SubscriptionStatus }) {
   const navigate = useNavigate();
+  const { tr } = useTranslation();
 
   if (status.loading) return null;
 
@@ -19,8 +21,7 @@ export default function RenewalBanner({ status }: { status: SubscriptionStatus }
   if (isExpired) {
     return (
       <div style={bannerStyle("#fdecea", "#b3261e")} onClick={() => navigate("/subscription")}>
-        {/* TODO: swap for t("subscription.expired", language) once i18n lookup exists */}
-        Your subscription has expired. You can view your data, but adding new entries requires renewal.
+        {tr("subscription.expired")}
       </div>
     );
   }
@@ -28,8 +29,7 @@ export default function RenewalBanner({ status }: { status: SubscriptionStatus }
   if (showRenewalWarning) {
     return (
       <div style={bannerStyle("#fff4e5", "#8a5300")} onClick={() => navigate("/subscription")}>
-        Your {status.tier === "trial" ? "trial" : "subscription"} ends in {status.daysUntilExpiry}{" "}
-        day{status.daysUntilExpiry === 1 ? "" : "s"}. Tap to renew.
+        {tr("subscription.renewalWarning", { days: status.daysUntilExpiry ?? 0 })}
       </div>
     );
   }

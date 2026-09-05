@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useTranslation } from "../../i18n/useTranslation";
 
 interface Counterparty {
   id: string;
@@ -25,6 +26,7 @@ interface LedgerEntry {
 
 export default function LedgerHome() {
   const { formatNumber } = useLanguage();
+  const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
@@ -141,45 +143,45 @@ export default function LedgerHome() {
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ fontSize: 13, color: "#888" }}>Total Balance</div>
+      <div style={{ fontSize: 13, color: "#888" }}>{tr("ledger.totalBalance")}</div>
       <div style={{ fontSize: 28, fontWeight: 500 }}>{formatNumber(balance)} AFN</div>
 
       <div style={{ display: "flex", gap: 10, margin: "12px 0" }}>
         <div style={{ flex: 1, background: "#e8f5e9", padding: 10, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: "#2e7d32" }}>Given</div>
+          <div style={{ fontSize: 12, color: "#2e7d32" }}>{tr("ledger.given")}</div>
           <div style={{ fontWeight: 500 }}>{formatNumber(given)}</div>
         </div>
         <div style={{ flex: 1, background: "#fdecea", padding: 10, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: "#b3261e" }}>Received</div>
+          <div style={{ fontSize: 12, color: "#b3261e" }}>{tr("ledger.received")}</div>
           <div style={{ fontWeight: 500 }}>{formatNumber(received)}</div>
         </div>
       </div>
 
       <button onClick={() => setShowNewEntry((v) => !v)} style={{ width: "100%", padding: 10 }}>
-        + New Entry
+        {tr("ledger.newEntry")}
       </button>
 
       {showNewEntry && (
         <form onSubmit={handleAddEntry} style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <select value={selectedCounterparty} onChange={(e) => setSelectedCounterparty(e.target.value)}>
-            <option value="">-- New contact --</option>
+            <option value="">{tr("ledger.newContact")}</option>
             {counterparties.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           {!selectedCounterparty && (
             <>
-              <input placeholder="Name" value={newCounterpartyName} onChange={(e) => setNewCounterpartyName(e.target.value)} />
-              <input placeholder="Phone number" value={newCounterpartyPhone} onChange={(e) => setNewCounterpartyPhone(e.target.value)} />
+              <input placeholder={tr("ledger.name")} value={newCounterpartyName} onChange={(e) => setNewCounterpartyName(e.target.value)} />
+              <input placeholder={tr("ledger.phoneNumber")} value={newCounterpartyPhone} onChange={(e) => setNewCounterpartyPhone(e.target.value)} />
             </>
           )}
           <div>
-            <label><input type="radio" checked={entryType === "credit"} onChange={() => setEntryType("credit")} /> Given (credit)</label>
-            <label style={{ marginLeft: 12 }}><input type="radio" checked={entryType === "debit"} onChange={() => setEntryType("debit")} /> Received (debit)</label>
+            <label><input type="radio" checked={entryType === "credit"} onChange={() => setEntryType("credit")} /> {tr("ledger.givenRadio")}</label>
+            <label style={{ marginLeft: 12 }}><input type="radio" checked={entryType === "debit"} onChange={() => setEntryType("debit")} /> {tr("ledger.receivedRadio")}</label>
           </div>
-          <input placeholder="Amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button type="submit">Save Entry</button>
+          <input placeholder={tr("ledger.amount")} type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} />
+          <button type="submit">{tr("ledger.save")}</button>
         </form>
       )}
 
@@ -195,7 +197,7 @@ export default function LedgerHome() {
                 {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
               </div>
               <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                {entry.syncStatus === "synced" ? "Synced" : "Pending sync"}
+                {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
               </div>
             </div>
           </div>

@@ -8,17 +8,20 @@ import PricesHome from "./features/prices/PricesHome";
 import SubscriptionScreen from "./features/subscription/SubscriptionScreen";
 import RequestAccessScreen from "./features/profile/RequestAccessScreen";
 import LoginScreen from "./features/auth/LoginScreen";
+import SettingsScreen from "./features/settings/SettingsScreen";
+import ChangePasswordScreen from "./features/settings/ChangePasswordScreen";
 import { useAuth } from "./lib/useAuth";
 import { useSubscriptionStatus } from "./lib/useSubscriptionStatus";
+import { useTranslation } from "./i18n/useTranslation";
 
-// Real auth state, replacing the earlier IS_AUTHENTICATED stub.
 export default function App() {
   const { session, isAuthenticated, loading } = useAuth();
   const [showRequestAccess, setShowRequestAccess] = useState(false);
   const subscriptionStatus = useSubscriptionStatus(session?.user.id);
+  const { tr } = useTranslation();
 
   if (loading) {
-    return <div style={{ padding: 16 }}>Loading…</div>;
+    return <div style={{ padding: 16 }}>{tr("auth.loading")}</div>;
   }
 
   if (!isAuthenticated) {
@@ -28,11 +31,8 @@ export default function App() {
     return (
       <div>
         <LoginScreen onLoggedIn={() => {}} />
-        <button
-          style={{ margin: "0 16px" }}
-          onClick={() => setShowRequestAccess(true)}
-        >
-          New here? Request access
+        <button style={{ margin: "0 16px" }} onClick={() => setShowRequestAccess(true)}>
+          {tr("auth.newHere")}
         </button>
       </div>
     );
@@ -48,6 +48,8 @@ export default function App() {
           <Route path="/inventory" element={<InventoryHome />} />
           <Route path="/prices" element={<PricesHome />} />
           <Route path="/subscription" element={<SubscriptionScreen />} />
+          <Route path="/settings" element={<SettingsScreen />} />
+          <Route path="/settings/change-password" element={<ChangePasswordScreen />} />
         </Routes>
       </div>
       <BottomNav />
