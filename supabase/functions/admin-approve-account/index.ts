@@ -112,9 +112,13 @@ serve(async (req) => {
     const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
       email: syntheticEmail,
       password: tempPassword,
-      phone: request.phone_number,
       email_confirm: true,
     });
+    // Deliberately NOT passing `phone` here — Supabase validates that
+    // field strictly (expects E.164 format like +93707339100), and we
+    // don't use Supabase's phone-auth at all; login is synthetic-email
+    // + password only. The real phone number lives on
+    // profiles.phone_number below, which is what the app actually uses.
 
     if (createErr || !newUser?.user) {
       console.error("auth user creation failed", createErr);

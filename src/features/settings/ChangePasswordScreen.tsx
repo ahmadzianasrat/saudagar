@@ -37,7 +37,23 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     const { data: userData } = await supabase.auth.getUser();
-    const phoneNumber = userData.user?.phone;
+    if (!userData.user) {
+      setError(tr("password.error"));
+      setLoading(false);
+      return;
+    }
+
+    // Read from profiles.phone_number, not auth.users.phone — the
+    // latter is intentionally left unset at account creation (see
+    // admin-approve-account), since login uses synthetic email +
+    // password only, not Supabase's own phone-auth field.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("phone_number")
+      .eq("id", userData.user.id)
+      .single();
+
+    const phoneNumber = profile?.phone_number;
     if (!phoneNumber) {
       setError(tr("password.error"));
       setLoading(false);

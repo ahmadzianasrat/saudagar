@@ -68,7 +68,7 @@ export default function AccountRequestsScreen() {
       const result = await callFunction("admin-approve-account", { request_id: request.id });
 
       if (result.error) {
-        setActionError(`Approval failed: ${result.error}`);
+        setActionError(`Approval failed: ${result.error}${result.detail ? ` — ${result.detail}` : ""}`);
         return;
       }
 

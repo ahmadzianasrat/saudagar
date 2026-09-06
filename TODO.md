@@ -121,3 +121,12 @@ see section 1 and 2.**
 - [x] **`RequestAccessScreen.tsx` fixed** (previous round) — now checks the insert's error before showing "pending approval."
 - [ ] **Redeploy required**: `admin-approve-account`, `admin-decline-account`, `create-payment-session` — all three need `supabase functions deploy <name>` again for the CORS fix to take effect
 - [ ] Retry the approve flow after redeploying — the temp password will appear directly in the admin panel's UI on success (this is also the answer to "how do I get a password" — it's generated automatically on approval, never chosen by the user)
+
+---
+
+## 15. user_creation_failed fix (this round)
+- [x] Admin panel now surfaces `result.detail` alongside `result.error`, so future failures show the actual underlying Supabase message instead of just an opaque error code
+- [x] **Removed `phone` from the `auth.admin.createUser()` call** in `admin-approve-account` — likely root cause of "user_creation_failed": Supabase validates that field strictly (expects E.164 format, e.g. `+93707339100`), and the request phone (`0707339100`) wasn't in that format. Login doesn't use Supabase's phone-auth anyway (synthetic email + password only), so the field wasn't needed — `profiles.phone_number` remains the real source of truth for the phone number.
+- [x] **Fixed a knock-on issue in `ChangePasswordScreen.tsx`** — it was reading the phone number from `auth.users.phone` to re-verify the current password, which would have silently broken once that field stopped being set. Now reads from `profiles.phone_number` instead.
+- [ ] **Redeploy required**: `admin-approve-account` again for this fix
+- [ ] Retry approving the same pending request once redeployed
