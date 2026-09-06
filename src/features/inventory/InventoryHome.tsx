@@ -35,12 +35,18 @@ export default function InventoryHome() {
   const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment">("purchase");
   const [txQuantity, setTxQuantity] = useState("");
   const [txUnitCost, setTxUnitCost] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setProfileId(data.user.id);
     });
-    supabase.from("commodities").select("id, name_en, unit").then(({ data }) => {
+    supabase.from("commodities").select("id, name_en, unit").then(({ data, error: commErr }) => {
+      if (commErr) {
+        console.error("failed to load commodities:", commErr);
+        setError("Couldn't load commodities.");
+        return;
+      }
       setCommodities(data ?? []);
     });
   }, []);
@@ -50,10 +56,21 @@ export default function InventoryHome() {
   }, [profileId]);
 
   async function loadItems() {
-    const { data: inv } = await supabase
+    const { data: inv, error: invErr } = await supabase
       .from("inventory_items")
       .select("id, commodity_id, quantity, avg_cost_per_unit, total_cost, commodities(name_en, unit)")
       .eq("profile_id", profileId);
+
+    if (invErr) {
+      // This was previously silently discarded — the likely cause of
+      // "entered items, showing nothing": inventory_items rows existed
+      // in the database, but this read was failing (RLS, join issue,
+      // etc.) with the error thrown away, always rendering an empty
+      // list regardless of what was actually in the table.
+      console.error("failed to load inventory_items:", invErr);
+      setError(`Couldn't load inventory: ${invErr.message}`);
+      return;
+    }
 
     const withPrices = await Promise.all(
       (inv ?? []).map(async (row: any) => {
@@ -77,6 +94,7 @@ export default function InventoryHome() {
 
   async function handleAddTransaction(itemId: string) {
     if (!profileId || !txQuantity) return;
+    setError(null);
     const clientId = generateClientId();
     const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
 
@@ -103,17 +121,25 @@ export default function InventoryHome() {
 
   async function addNewCommodityToInventory(commodityId: string) {
     if (!profileId) return;
-    const { data, error } = await supabase
+    setError(null);
+    const { data, error: insertError } = await supabase
       .from("inventory_items")
       .insert({ profile_id: profileId, commodity_id: commodityId, quantity: 0, avg_cost_per_unit: 0 })
       .select()
       .single();
-    if (!error && data) loadItems();
+
+    if (insertError || !data) {
+      console.error("failed to add inventory item:", insertError);
+      setError(`Couldn't add item: ${insertError?.message ?? "unknown error"}`);
+      return;
+    }
+    loadItems();
   }
 
   return (
     <div style={{ padding: 16 }}>
       <h2>{tr("inventory.title")}</h2>
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
 
       {items.map((item) => (
         <div key={item.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12, marginBottom: 10 }}>

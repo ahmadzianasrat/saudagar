@@ -130,3 +130,46 @@ see section 1 and 2.**
 - [x] **Fixed a knock-on issue in `ChangePasswordScreen.tsx`** — it was reading the phone number from `auth.users.phone` to re-verify the current password, which would have silently broken once that field stopped being set. Now reads from `profiles.phone_number` instead.
 - [ ] **Redeploy required**: `admin-approve-account` again for this fix
 - [ ] Retry approving the same pending request once redeployed
+
+---
+
+## 16. This round's fixes and new features
+
+### Vercel hard-refresh 404
+- [x] Added `vercel.json` with an SPA rewrite rule — without it, refreshing any route other than `/` (e.g. `/inventory`) returns a 404 because Vercel looks for a physical file there. Only needed for the main app (admin panel has no client-side routing yet).
+
+### HesabPay `hesabpay_create_failed`
+- [x] Found the likely cause: redirect URLs used a custom `saudagar://` scheme, meaningless for a PWA with no such scheme registered. Changed to real `https://saudagar-tan.vercel.app/subscription?...` URLs via a new `APP_URL` Edge Function secret (defaults to that domain if unset).
+- [x] `SubscriptionScreen` now shows the full error detail on failure instead of discarding it, and shows a notice banner when redirected back from HesabPay checkout (success or failure) — note the redirect itself is informational only; the webhook is still the actual source of truth for activation.
+- [ ] **Redeploy required**: `create-payment-session`
+- [ ] **Set the `APP_URL` secret** if your domain differs: `supabase secrets set APP_URL=https://saudagar-tan.vercel.app`
+- [ ] Retry subscribing — if it still fails, the error message will now show HesabPay's actual rejection reason instead of just the generic code
+
+### Ledger restructured to per-customer accounts
+- [x] `LedgerHome.tsx` is now a contact list — each customer shows their own running balance, sorted by most recent activity, with a "+ Add Contact" flow
+- [x] New `CounterpartyLedgerDetail.tsx` — tapping a contact opens their individual ledger (balance, given/received breakdown, entries, new-entry form), replacing the old combined single-page feed
+- [x] New route `/ledger/:counterpartyId` added to `App.tsx`
+
+### Inventory silently showing nothing
+- [x] Found the likely cause: several Supabase queries in `InventoryHome.tsx` destructured only `data` and discarded `error` entirely — so a failed read (RLS, bad join, anything) rendered as an empty list with zero indication anything was wrong, even if the underlying insert had actually succeeded.
+- [x] Added proper error checking + visible error messages to every read/write in `InventoryHome.tsx`
+- [ ] **Test again after redeploying** — if it still shows nothing, you'll now see an actual error message on screen; share that text rather than "shows nothing," since that's what will actually pin down the remaining cause if the error-swallowing wasn't the whole story
+
+### Manual subscription payments (new feature)
+- [x] `008_manual_payments.sql` — new `manual_payment_requests` table + a private `payment-proofs` Storage bucket with RLS (users upload/read only their own folder, admins with `can_approve_accounts` can read all)
+- [x] `admin-approve-manual-payment` / `admin-reject-manual-payment` Edge Functions — approval creates a real `subscriptions` row (same pattern as the trial), rejection just marks the claim rejected
+- [x] `SubscriptionScreen.tsx` — added a "Pay another way (cash / mobile top-up)" section: pick a tier, add a note, optionally attach a screenshot, submit for review
+- [x] `ManualPaymentsScreen.tsx` (admin panel, new tab) — shows each pending claim with shop info, note, and a signed-URL preview of the proof image if attached, with Approve/Reject buttons
+- [ ] **Run migration `008_manual_payments.sql`**
+- [ ] **Deploy both new Edge Functions**: `admin-approve-manual-payment`, `admin-reject-manual-payment`
+- [ ] Test the full loop: submit a manual claim as a shop owner, review + approve it as admin, confirm a `subscriptions` row appears
+
+---
+
+## What's next after this round
+1. Redeploy the 4 touched/new Edge Functions and push the app + admin panel changes
+2. Re-test all four bug fixes (hard refresh, HesabPay, ledger, inventory) and the new manual-payment flow end-to-end
+3. Real-device offline testing (still open from earlier — now more meaningful since the ledger structure actually matches the real product shape)
+4. WhatsApp "send today's entries" export button (still open)
+5. In-app policy content screen (still open)
+6. Once the above is solid: onboard your price-uploader on the live admin panel, do one real HesabPay test transaction, then start onboarding real shop owners

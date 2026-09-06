@@ -3,7 +3,6 @@
   "nav.inventory": "ذخيره",
   "nav.prices": "بيې",
   "nav.settings": "تنظیمات",
-
   "ledger.totalBalance": "ټول بېلانس",
   "ledger.given": "درکړل شوي",
   "ledger.received": "اخيستل شوي",
@@ -18,7 +17,6 @@
   "ledger.save": "ليکنه خوندي کړئ",
   "ledger.givenRadio": "درکړل شوي (پور)",
   "ledger.receivedRadio": "اخيستل شوي (پور اخیستل)",
-
   "inventory.title": "ذخيره",
   "inventory.avgCost": "منځنۍ بیه",
   "inventory.total": "ټول",
@@ -32,16 +30,13 @@
   "inventory.unitCost": "د واحد بیه",
   "inventory.save": "خوندي کول",
   "inventory.addCommodity": "د تعقیب لپاره توکی اضافه کړئ",
-
   "prices.today": "نننۍ بيې",
   "prices.none": "لا تر اوسه د دې بازار لپاره بیه اپلوډ نه ده شوې.",
-
   "subscription.title": "اشتراک",
   "subscription.monthly": "میاشتنی — ۲۵۰ افغانۍ",
   "subscription.sixMonth": "۶ میاشتې — ۱۲۵۰ افغانۍ (~۱۷٪ سپما)",
   "subscription.expired": "ستاسو اشتراک پای ته رسیدلی. تاسو کولی شئ خپلې معلومات وګورئ، خو د نوې ليکنې لپاره نوي کول اړین دي.",
   "subscription.renewalWarning": "په {days} ورځو کې پای ته رسیږي. د نوي کولو لپاره کلیک وکړئ.",
-
   "auth.login": "ننوتل",
   "auth.phoneNumber": "د تلیفون شمېره",
   "auth.password": "پټ نوم",
@@ -49,13 +44,11 @@
   "auth.incorrect": "د تلیفون شمېره یا پټ نوم غلط دی.",
   "auth.newHere": "نوی یاست؟ د لاسرسي غوښتنه وکړئ",
   "auth.loading": "بار کیږي…",
-
   "onboarding.requestAccess": "د لاسرسي غوښتنه",
   "onboarding.ownerName": "د مالک نوم",
   "onboarding.shopName": "د دوکان نوم",
   "onboarding.submit": "وسپارئ",
   "onboarding.pendingApproval": "ستاسو غوښتنه د تصویب په تمه ده.",
-
   "settings.title": "تنظیمات",
   "settings.language": "ژبه",
   "settings.numberFormat": "د شمېرو بڼه",
@@ -66,7 +59,6 @@
   "settings.manageSubscription": "اشتراک اداره کړئ",
   "settings.changePassword": "پټ نوم بدل کړئ",
   "settings.logout": "وتل",
-
   "password.title": "پټ نوم بدلول",
   "password.current": "اوسنی پټ نوم",
   "password.new": "نوی پټ نوم",
@@ -76,5 +68,7 @@
   "password.tooShort": "نوی پټ نوم باید لږ تر لږه ۶ توري ولري.",
   "password.incorrectCurrent": "اوسنی پټ نوم غلط دی.",
   "password.success": "پټ نوم په بریالیتوب سره بدل شو.",
-  "password.error": "یو څه غلط شول. بیا هڅه وکړئ."
+  "password.error": "یو څه غلط شول. بیا هڅه وکړئ.",
+  "ledger.addContact": "+ اړیکه اضافه کړئ",
+  "ledger.noContacts": "لا تر اوسه هېڅ اړیکه نشته. د پیل لپاره یو اضافه کړئ."
 }

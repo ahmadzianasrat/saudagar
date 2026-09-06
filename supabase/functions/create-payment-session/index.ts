@@ -24,6 +24,13 @@ const HESABPAY_API_KEY = Deno.env.get("HESABPAY_API_KEY")!;
 const HESABPAY_CREATE_SESSION_URL = "https://api.hesab.com/api/v1/payment/create-session";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// The deployed main app's real URL — set this as a Supabase secret
+// (supabase secrets set APP_URL=https://saudagar-tan.vercel.app).
+// Redirect URLs previously used a custom "saudagar://" scheme, which
+// only makes sense for a native app with that scheme registered —
+// this is a PWA, so HesabPay almost certainly rejected it as an
+// invalid URL, which is the likely cause of hesabpay_create_failed.
+const APP_URL = Deno.env.get("APP_URL") ?? "https://saudagar-tan.vercel.app";
 
 // Pricing is defined server-side, never trusted from the client,
 // so a tampered request can't buy a subscription at the wrong price.
@@ -113,8 +120,8 @@ serve(async (req) => {
         items: [
           { id: session.id, name: label, price: amount },
         ],
-        redirect_success_url: `saudagar://payment/success?session=${session.id}`,
-        redirect_failure_url: `saudagar://payment/cancelled?session=${session.id}`,
+        redirect_success_url: `${APP_URL}/subscription?payment=success&session=${session.id}`,
+        redirect_failure_url: `${APP_URL}/subscription?payment=failure&session=${session.id}`,
       }),
     });
 

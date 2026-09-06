@@ -3,7 +3,6 @@
   "nav.inventory": "Inventory",
   "nav.prices": "Prices",
   "nav.settings": "Settings",
-
   "ledger.totalBalance": "Total Balance",
   "ledger.given": "Given",
   "ledger.received": "Received",
@@ -18,7 +17,6 @@
   "ledger.save": "Save Entry",
   "ledger.givenRadio": "Given (credit)",
   "ledger.receivedRadio": "Received (debit)",
-
   "inventory.title": "Inventory",
   "inventory.avgCost": "Avg cost",
   "inventory.total": "Total",
@@ -32,16 +30,13 @@
   "inventory.unitCost": "Unit cost",
   "inventory.save": "Save",
   "inventory.addCommodity": "Add a commodity to track",
-
   "prices.today": "Today's Prices",
   "prices.none": "No prices uploaded yet for this market.",
-
   "subscription.title": "Subscription",
   "subscription.monthly": "Monthly — 250 AFN",
   "subscription.sixMonth": "6 Months — 1,250 AFN (save ~17%)",
   "subscription.expired": "Your subscription has expired. You can view your data, but adding new entries requires renewal.",
   "subscription.renewalWarning": "ends in {days} day(s). Tap to renew.",
-
   "auth.login": "Log In",
   "auth.phoneNumber": "Phone number",
   "auth.password": "Password",
@@ -49,13 +44,11 @@
   "auth.incorrect": "Phone number or password is incorrect.",
   "auth.newHere": "New here? Request access",
   "auth.loading": "Loading…",
-
   "onboarding.requestAccess": "Request Access",
   "onboarding.ownerName": "Owner name",
   "onboarding.shopName": "Shop name",
   "onboarding.submit": "Submit",
   "onboarding.pendingApproval": "Your request is pending approval.",
-
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.numberFormat": "Number Format",
@@ -66,7 +59,6 @@
   "settings.manageSubscription": "Manage Subscription",
   "settings.changePassword": "Change Password",
   "settings.logout": "Log Out",
-
   "password.title": "Change Password",
   "password.current": "Current password",
   "password.new": "New password",
@@ -76,5 +68,7 @@
   "password.tooShort": "New password must be at least 6 characters.",
   "password.incorrectCurrent": "Current password is incorrect.",
   "password.success": "Password changed successfully.",
-  "password.error": "Something went wrong. Try again."
+  "password.error": "Something went wrong. Try again.",
+  "ledger.addContact": "+ Add Contact",
+  "ledger.noContacts": "No contacts yet. Add one to get started."
 }
