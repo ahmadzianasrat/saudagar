@@ -136,12 +136,12 @@ serve(async (req) => {
       return jsonResponse({ error: "hesabpay_create_failed", detail: hesabData }, 502);
     }
 
-    // Response shape confirmed against HesabPay's docs: { success, payment_url, message }.
-    // No session id is returned at creation — the only reliable reference
-    // back to this row is items[0].id (= session.id), which HesabPay
-    // echoes back unchanged in the webhook payload. Confirmed working
-    // end-to-end against the real Webhooks documentation.
-    const sessionUrl = hesabData?.payment_url;
+    // Response shape per HesabPay's docs example was { success, payment_url,
+    // message } — but the REAL live response uses "url", not "payment_url"
+    // (confirmed against an actual response: {"url": "...", "message":
+    // "Payment session created successfully", "success": true, ...}).
+    // Checking both, preferring the confirmed-real field name first.
+    const sessionUrl = hesabData?.url ?? hesabData?.payment_url;
 
     await supabase
       .from("payment_sessions")
