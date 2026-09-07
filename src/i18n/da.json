@@ -85,5 +85,22 @@
   "inventory.salePrice": "قیمت فروش (به ازای هر واحد)",
   "inventory.totalAmount": "مجموع",
   "inventory.priceRequired": "لطفاً یک قیمت وارد کنید.",
-  "auth.forgotPassword": "رمز عبور خود را فراموش کرده‌اید؟ برای بازنشانی با مسئول سوداگر خود تماس بگیرید."
+  "auth.forgotPassword": "رمز عبور خود را فراموش کرده‌اید؟ برای بازنشانی با مسئول سوداگر خود تماس بگیرید.",
+  "date.today": "امروز",
+  "date.yesterday": "دیروز",
+  "ledger.address": "آدرس (اختیاری)",
+  "ledger.whatsappNumber": "شماره واتساپ (اختیاری)",
+  "ledger.mobileNumber": "شماره موبایل",
+  "ledger.profileInfo": "اطلاعات تماس",
+  "settings.dateSystem": "قالب تاریخ",
+  "settings.gregorian": "میلادی",
+  "settings.shamsi": "شمسی",
+  "settings.currencyConverter": "مبدل ارز",
+  "currency.title": "مبدل ارز",
+  "currency.amount": "مبلغ",
+  "currency.from": "از",
+  "currency.to": "به",
+  "currency.editRates": "ویرایش نرخ‌های تبدیل",
+  "currency.ratesNote": "نرخ‌ها توسط شما تنظیم و روی این دستگاه ذخیره می‌شوند — نرخ زنده بازار نیستند.",
+  "currency.rateFor": "۱ افغانی ="
 }

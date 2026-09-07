@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 export interface SubscriptionStatus {
@@ -10,7 +10,14 @@ export interface SubscriptionStatus {
 }
 
 const RENEWAL_WARNING_DAYS = 5; // banner starts showing 5 days before expiry, per decision
+const POLL_INTERVAL_MS = 30_000;
 
+// Refetches on mount, on window focus, and periodically while mounted —
+// not just once. Without this, a payment confirmed by the webhook
+// (which happens asynchronously, server-side, with no client push
+// notification) would sit invisible until the user manually reloaded
+// the page. This is the fix for the "have to refresh to see it
+// activated" symptom.
 export function useSubscriptionStatus(profileId: string | undefined): SubscriptionStatus {
   const [state, setState] = useState<SubscriptionStatus>({
     hasAccess: false,
@@ -20,46 +27,53 @@ export function useSubscriptionStatus(profileId: string | undefined): Subscripti
     loading: true,
   });
 
+  const load = useCallback(async () => {
+    if (!profileId) return;
+
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("profile_id", profileId)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      setState({ hasAccess: false, tier: null, expiresAt: null, daysUntilExpiry: null, loading: false });
+      return;
+    }
+
+    const expiresAt = new Date(data.expires_at);
+    const msRemaining = expiresAt.getTime() - Date.now();
+    const daysUntilExpiry = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
+
+    setState({
+      hasAccess: msRemaining > 0,
+      tier: data.tier,
+      expiresAt,
+      daysUntilExpiry,
+      loading: false,
+    });
+  }, [profileId]);
+
   useEffect(() => {
     if (!profileId) return;
 
-    let cancelled = false;
-
-    async function load() {
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("profile_id", profileId)
-        .eq("status", "active")
-        .order("expires_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (error || !data) {
-        setState({ hasAccess: false, tier: null, expiresAt: null, daysUntilExpiry: null, loading: false });
-        return;
-      }
-
-      const expiresAt = new Date(data.expires_at);
-      const msRemaining = expiresAt.getTime() - Date.now();
-      const daysUntilExpiry = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
-
-      setState({
-        hasAccess: msRemaining > 0,
-        tier: data.tier,
-        expiresAt,
-        daysUntilExpiry,
-        loading: false,
-      });
-    }
-
     load();
+
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    const interval = setInterval(load, POLL_INTERVAL_MS);
+
     return () => {
-      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      clearInterval(interval);
     };
-  }, [profileId]);
+  }, [profileId, load]);
 
   return state;
 }

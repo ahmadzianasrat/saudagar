@@ -85,5 +85,22 @@
   "inventory.salePrice": "Sale price (per unit)",
   "inventory.totalAmount": "Total",
   "inventory.priceRequired": "Please enter a price.",
-  "auth.forgotPassword": "Forgot your password? Contact your shop's Saudagar admin to reset it."
+  "auth.forgotPassword": "Forgot your password? Contact your shop's Saudagar admin to reset it.",
+  "date.today": "Today",
+  "date.yesterday": "Yesterday",
+  "ledger.address": "Address (optional)",
+  "ledger.whatsappNumber": "WhatsApp number (optional)",
+  "ledger.mobileNumber": "Mobile number",
+  "ledger.profileInfo": "Contact Info",
+  "settings.dateSystem": "Date format",
+  "settings.gregorian": "Christian (Gregorian)",
+  "settings.shamsi": "Shamsi (Solar Hijri)",
+  "settings.currencyConverter": "Currency Converter",
+  "currency.title": "Currency Converter",
+  "currency.amount": "Amount",
+  "currency.from": "From",
+  "currency.to": "To",
+  "currency.editRates": "Edit exchange rates",
+  "currency.ratesNote": "Rates are set by you and stored on this device — not live market rates. Update them as needed.",
+  "currency.rateFor": "1 AFN ="
 }

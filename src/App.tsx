@@ -11,6 +11,7 @@ import RequestAccessScreen from "./features/profile/RequestAccessScreen";
 import LoginScreen from "./features/auth/LoginScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import ChangePasswordScreen from "./features/settings/ChangePasswordScreen";
+import CurrencyConverterScreen from "./features/tools/CurrencyConverterScreen";
 import { useAuth } from "./lib/useAuth";
 import { useSubscriptionStatus } from "./lib/useSubscriptionStatus";
 import { useTranslation } from "./i18n/useTranslation";
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/subscription" element={<SubscriptionScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/settings/change-password" element={<ChangePasswordScreen />} />
+          <Route path="/tools/currency-converter" element={<CurrencyConverterScreen />} />
         </Routes>
       </div>
       <BottomNav />

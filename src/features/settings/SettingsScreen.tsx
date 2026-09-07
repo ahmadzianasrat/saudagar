@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useLanguage, type Language, type DigitStyle } from "../../contexts/LanguageContext";
+import { useLanguage, type Language, type DigitStyle, type DateSystem } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -16,6 +16,7 @@ export default function SettingsScreen() {
     language, setLanguage,
     digitStyle, setDigitStyle,
     useThousandSeparator, setUseThousandSeparator,
+    dateSystem, setDateSystem,
   } = useLanguage();
 
   async function handleLogout() {
@@ -85,9 +86,35 @@ export default function SettingsScreen() {
         </label>
       </section>
 
+      <section style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("settings.dateSystem")}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {(["gregorian", "shamsi"] as DateSystem[]).map((system) => (
+            <button
+              key={system}
+              onClick={() => setDateSystem(system)}
+              style={{
+                flex: 1,
+                padding: 10,
+                background: dateSystem === system ? "#1e6f5c" : "#f0f0f0",
+                color: dateSystem === system ? "#fff" : "#333",
+                border: "none",
+                borderRadius: 6,
+                fontSize: 13,
+              }}
+            >
+              {system === "gregorian" ? tr("settings.gregorian") : tr("settings.shamsi")}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section style={{ marginTop: 24, display: "grid", gap: 8 }}>
         <button onClick={() => navigate("/subscription")} style={{ padding: 12 }}>
           {tr("settings.manageSubscription")}
+        </button>
+        <button onClick={() => navigate("/tools/currency-converter")} style={{ padding: 12 }}>
+          {tr("settings.currencyConverter")}
         </button>
         <button onClick={() => navigate("/settings/change-password")} style={{ padding: 12 }}>
           {tr("settings.changePassword")}

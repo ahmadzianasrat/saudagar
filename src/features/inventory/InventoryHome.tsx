@@ -4,6 +4,7 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
+import { dateGroupLabel, formatDateTime } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -44,7 +45,7 @@ interface TransactionRow {
 // "price against their own stock" differentiator decided on earlier,
 // not just a standalone price list.
 export default function InventoryHome() {
-  const { formatNumber } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -166,18 +167,20 @@ export default function InventoryHome() {
     const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
 
     // unit_cost is reused for both purchase cost AND sale price —
-    // the apply_inventory_transaction trigger only reads it for
-    // purchases when recalculating avg_cost_per_unit, so storing a
-    // sale price here doesn't affect the item's cost basis. It's
-    // still useful as a record of what the sale actually went for.
+    // the apply_inventory_transaction trigger only reads unit_cost,
+    // transport_cost, and porter_fee for PURCHASES when recalculating
+    // avg_cost_per_unit — so any of these entered on a SALE are
+    // recorded for your own reference (what this sale actually cost
+    // to fulfill/deliver) but deliberately do NOT change the item's
+    // average acquisition cost shown on the main inventory page.
     const payload = {
       client_id: clientId,
       inventory_item_id: itemId,
       transaction_type: txType,
       quantity: signedQty,
       unit_cost: txType !== "adjustment" ? Number(txUnitCost) || null : null,
-      transport_cost: txType === "purchase" ? Number(txTransportCost) || 0 : 0,
-      porter_fee: txType === "purchase" ? Number(txPorterFee) || 0 : 0,
+      transport_cost: txType !== "adjustment" ? Number(txTransportCost) || 0 : 0,
+      porter_fee: txType !== "adjustment" ? Number(txPorterFee) || 0 : 0,
     };
 
     await enqueueWrite("inventory_transactions", clientId, payload);
@@ -234,6 +237,7 @@ export default function InventoryHome() {
   }
 
   const pagedTransactions = allTransactions.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
+  let lastGroupLabel: string | null = null;
 
   return (
     <div style={{ padding: 16 }}>
@@ -273,7 +277,11 @@ export default function InventoryHome() {
                 </>
               )}
               {txType === "sale" && (
-                <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required />
+                <>
+                  <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required />
+                  <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} />
+                  <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} />
+                </>
               )}
               <button onClick={() => handleAddTransaction(item.id)}>{tr("inventory.save")}</button>
             </div>
@@ -295,35 +303,47 @@ export default function InventoryHome() {
       <div style={{ marginTop: 24 }}>
         <h3 style={{ fontSize: 15 }}>{tr("inventory.allTransactions")}</h3>
         {allTransactions.length === 0 && <p style={{ color: "#888" }}>{tr("inventory.noTransactions")}</p>}
-        {pagedTransactions.map((tx) => (
-          <div key={tx.client_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-            <div>
-              <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
-              <div style={{ fontSize: 11, color: "#999" }}>{new Date(tx.created_at).toLocaleString()}</div>
-              {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
-                <div style={{ fontSize: 11, color: "#999" }}>
-                  {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
+        {pagedTransactions.map((tx) => {
+          const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
+          const showHeader = groupLabel !== lastGroupLabel;
+          lastGroupLabel = groupLabel;
+          return (
+            <div key={tx.client_id}>
+              {showHeader && (
+                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
+                  {groupLabel}
                 </div>
               )}
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
-                {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
-              </div>
-              {tx.unit_cost !== null && (
-                <>
-                  <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
-                  <div style={{ fontSize: 11, color: "#999" }}>
-                    {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                <div>
+                  <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>{formatDateTime(tx.created_at, dateSystem, digitStyle)}</div>
+                  {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
+                    <div style={{ fontSize: 11, color: "#999" }}>
+                      {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
+                    {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
                   </div>
-                </>
-              )}
-              <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  {tx.unit_cost !== null && (
+                    <>
+                      <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+                      <div style={{ fontSize: 11, color: "#999" }}>
+                        {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                      </div>
+                    </>
+                  )}
+                  <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                    {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <Pagination page={txPage} totalItems={allTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
       </div>
     </div>

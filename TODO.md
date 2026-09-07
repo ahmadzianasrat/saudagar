@@ -226,3 +226,37 @@ see section 1 and 2.**
 4. **WhatsApp "send today's entries" export** — still on the list, not yet built
 5. **In-app policy content screen** — markdown files exist, not routed into the app
 6. Once the above feels solid: onboard your price-uploader for real, complete one full real HesabPay payment end-to-end (session creation is confirmed working, but the webhook → active subscription half has never been tested with a real completed payment), then start onboarding real shop owners
+
+---
+
+## 19. This round's additions
+
+### Date grouping (Ledger + Inventory)
+- [x] New `src/lib/dateFormat.ts` using the `jalaali-js` library (not hand-written — Gregorian↔Jalali conversion has real leap-year edge cases not worth risking in a records app)
+- [x] "Today" / "Yesterday" / date headers now separate entries in: the main Ledger's All Entries table, the per-contact ledger detail, and Inventory's All Transactions table
+
+### Extended contact fields
+- [x] `012_counterparty_fields.sql` — added `address` and `whatsapp_number` columns; existing `phone_number` is now treated as "mobile number" in the UI (no rename, to avoid breaking existing data/wa.me code that reads it)
+- [x] Add-contact form now captures all 4 fields (name required, mobile required, WhatsApp + address optional)
+- [x] WhatsApp number shown alongside name in the contact list
+- [x] Full profile card (name, mobile, WhatsApp, address) shown at the top of each contact's detail page
+
+### Shamsi/Gregorian date toggle
+- [x] New `dateSystem` preference in `LanguageContext` (default: Gregorian), toggle added to Settings
+- [x] Every date display in Ledger and Inventory now respects this setting
+
+### Currency converter
+- [x] New `CurrencyConverterScreen.tsx`, linked from Settings — converts between AFN and a few other currencies (USD, PKR, INR) using rates YOU set and edit yourself, stored locally on the device
+- [ ] **This is explicitly not a live-rate feed** — no exchange rate API is wired up. Update the rates manually as needed, or flag if you want a live-rate integration built later (that's a separate, larger decision involving picking a reliable data source).
+
+### Inventory sale-side costs
+- [x] Transport cost and porter fee are now optional fields on **sale** transactions too, not just purchases
+- [x] Confirmed and documented: these do NOT affect `avg_cost_per_unit` (the main inventory page's cost figure) — only purchase-side costs feed into acquisition cost basis. Sale-side costs are recorded for your own reference only.
+
+### Refresh issue
+- [x] Fixed the confirmed architectural gap: `useSubscriptionStatus` now refetches on window focus, on tab visibility change, and every 30 seconds while mounted — not just once on page load. This directly fixes "subscribed via HesabPay but had to refresh to see it activate," since that status change happens asynchronously via the webhook with no way for the app to be pushed a notification.
+- [ ] **If other specific screens still show stale data after a write**, that needs a precise repro (which screen, which action) to diagnose — the ledger and inventory screens already update their own state optimistically on every write made through their own UI, so if something there is still stale, it's a different, more specific bug worth describing exactly rather than "refresh issues" generally.
+
+- [ ] **Run migration `012_counterparty_fields.sql`**
+- [ ] **`npm install`** needed before building — `jalaali-js` was added as a new dependency
+- [ ] No Edge Functions changed this round — only migrations + app/admin-panel code

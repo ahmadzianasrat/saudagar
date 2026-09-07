@@ -5,9 +5,17 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
+import { dateGroupLabel, formatDateTime } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
+
+interface ContactProfile {
+  name: string;
+  phone_number: string; // mobile number
+  whatsapp_number: string | null;
+  address: string | null;
+}
 
 interface LedgerEntry {
   id: string;
@@ -19,18 +27,14 @@ interface LedgerEntry {
   syncStatus?: "pending" | "synced" | "not_found";
 }
 
-// The per-contact detail view — everything LedgerHome used to show
-// combined across all customers now lives here, scoped to one
-// counterparty_id via the route param.
 export default function CounterpartyLedgerDetail() {
   const { counterpartyId } = useParams<{ counterpartyId: string }>();
   const navigate = useNavigate();
-  const { formatNumber } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
 
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [contactName, setContactName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
+  const [contact, setContact] = useState<ContactProfile | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [entryType, setEntryType] = useState<"credit" | "debit">("credit");
@@ -55,13 +59,10 @@ export default function CounterpartyLedgerDetail() {
   async function loadContact() {
     const { data } = await supabase
       .from("counterparties")
-      .select("name, phone_number")
+      .select("name, phone_number, whatsapp_number, address")
       .eq("id", counterpartyId)
       .single();
-    if (data) {
-      setContactName(data.name);
-      setContactPhone(data.phone_number);
-    }
+    if (data) setContact(data);
   }
 
   async function loadEntries() {
@@ -123,6 +124,7 @@ export default function CounterpartyLedgerDetail() {
   }
 
   const pagedEntries = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  let lastGroupLabel: string | null = null;
 
   return (
     <div style={{ padding: 16 }}>
@@ -130,10 +132,19 @@ export default function CounterpartyLedgerDetail() {
         ← {tr("nav.ledger")}
       </button>
 
-      <h2 style={{ marginBottom: 0 }}>{contactName}</h2>
-      <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>{contactPhone}</div>
-
       {error && <p style={{ color: "crimson" }}>{error}</p>}
+
+      {contact && (
+        <div style={{ background: "#f7f7f5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>{contact.name}</h2>
+          <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{tr("ledger.profileInfo")}</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>{tr("ledger.mobileNumber")}: {contact.phone_number}</div>
+          {contact.whatsapp_number && (
+            <div style={{ fontSize: 13, color: "#25D366" }}>{tr("ledger.whatsappNumber")}: {contact.whatsapp_number}</div>
+          )}
+          {contact.address && <div style={{ fontSize: 13 }}>{tr("ledger.address")}: {contact.address}</div>}
+        </div>
+      )}
 
       <div style={{ fontSize: 28, fontWeight: 500 }}>{formatNumber(Math.abs(balance))} AFN</div>
 
@@ -165,22 +176,34 @@ export default function CounterpartyLedgerDetail() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        {pagedEntries.map((entry) => (
-          <div key={entry.client_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "#999" }}>{new Date(entry.entry_date).toLocaleString()}</div>
-              {entry.note && <div style={{ fontSize: 12 }}>{entry.note}</div>}
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
-                {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+        {pagedEntries.map((entry) => {
+          const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
+          const showHeader = groupLabel !== lastGroupLabel;
+          lastGroupLabel = groupLabel;
+          return (
+            <div key={entry.client_id}>
+              {showHeader && (
+                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
+                  {groupLabel}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#999" }}>{formatDateTime(entry.entry_date, dateSystem, digitStyle)}</div>
+                  {entry.note && <div style={{ fontSize: 12 }}>{entry.note}</div>}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
+                    {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+                  </div>
+                  <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                    {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
-              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <Pagination page={page} totalItems={entries.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </div>

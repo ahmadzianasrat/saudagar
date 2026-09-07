@@ -17,17 +17,20 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 export type Language = "en" | "ps" | "da";
 export type DigitStyle = "western" | "eastern_arabic";
+export type DateSystem = "gregorian" | "shamsi";
 
 interface LanguagePrefs {
   language: Language;
   digitStyle: DigitStyle;
   useThousandSeparator: boolean;
+  dateSystem: DateSystem;
 }
 
 interface LanguageContextValue extends LanguagePrefs {
   setLanguage: (lang: Language) => void;
   setDigitStyle: (style: DigitStyle) => void;
   setUseThousandSeparator: (value: boolean) => void;
+  setDateSystem: (system: DateSystem) => void;
   isRTL: boolean;
   formatNumber: (value: number) => string;
 }
@@ -38,6 +41,7 @@ const DEFAULT_PREFS: LanguagePrefs = {
   language: "ps",
   digitStyle: "western",
   useThousandSeparator: true,
+  dateSystem: "gregorian",
 };
 
 const EASTERN_ARABIC_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
@@ -83,6 +87,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setLanguage: (language) => setPrefs((p) => ({ ...p, language })),
     setDigitStyle: (digitStyle) => setPrefs((p) => ({ ...p, digitStyle })),
     setUseThousandSeparator: (useThousandSeparator) => setPrefs((p) => ({ ...p, useThousandSeparator })),
+    setDateSystem: (dateSystem) => setPrefs((p) => ({ ...p, dateSystem })),
     isRTL: prefs.language !== "en",
     formatNumber,
   };

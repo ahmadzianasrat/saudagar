@@ -5,6 +5,7 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
+import { dateGroupLabel } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -12,7 +13,9 @@ const PAGE_SIZE = 10;
 interface Counterparty {
   id: string;
   name: string;
-  phone_number: string;
+  phone_number: string; // treated as "mobile number" in the UI
+  whatsapp_number: string | null;
+  address: string | null;
 }
 
 interface CounterpartyWithBalance extends Counterparty {
@@ -34,7 +37,7 @@ interface EntryRow {
 
 export default function LedgerHome() {
   const navigate = useNavigate();
-  const { formatNumber } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<CounterpartyWithBalance[]>([]);
@@ -42,13 +45,12 @@ export default function LedgerHome() {
   const [entriesPage, setEntriesPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
-  // Add-contact form (unchanged from before)
   const [showAddContact, setShowAddContact] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState("");
+  const [newMobile, setNewMobile] = useState("");
+  const [newWhatsapp, setNewWhatsapp] = useState("");
+  const [newAddress, setNewAddress] = useState("");
 
-  // Quick-entry form — write into an existing contact's ledger
-  // directly from this page, without navigating to their detail view.
   const [showQuickEntry, setShowQuickEntry] = useState(false);
   const [quickContactId, setQuickContactId] = useState("");
   const [quickType, setQuickType] = useState<"credit" | "debit">("credit");
@@ -68,7 +70,7 @@ export default function LedgerHome() {
   async function load() {
     const { data: counterparties, error: cpErr } = await supabase
       .from("counterparties")
-      .select("id, name, phone_number")
+      .select("id, name, phone_number, whatsapp_number, address")
       .eq("owner_profile_id", profileId);
 
     if (cpErr) {
@@ -122,11 +124,17 @@ export default function LedgerHome() {
 
   async function handleAddContact(e: FormEvent) {
     e.preventDefault();
-    if (!profileId || !newName || !newPhone) return;
+    if (!profileId || !newName || !newMobile) return;
 
     const { data, error: insertError } = await supabase
       .from("counterparties")
-      .insert({ owner_profile_id: profileId, name: newName, phone_number: newPhone })
+      .insert({
+        owner_profile_id: profileId,
+        name: newName,
+        phone_number: newMobile,
+        whatsapp_number: newWhatsapp || null,
+        address: newAddress || null,
+      })
       .select()
       .single();
 
@@ -137,7 +145,9 @@ export default function LedgerHome() {
     }
 
     setNewName("");
-    setNewPhone("");
+    setNewMobile("");
+    setNewWhatsapp("");
+    setNewAddress("");
     setShowAddContact(false);
     navigate(`/ledger/${data.id}`);
   }
@@ -157,8 +167,6 @@ export default function LedgerHome() {
       entry_date: new Date().toISOString(),
     });
 
-    // Update the affected contact's balance locally so the list
-    // reflects the change immediately, without waiting on a re-fetch.
     const contactName = contacts.find((c) => c.id === quickContactId)?.name;
     setContacts((prev) =>
       prev.map((c) =>
@@ -191,6 +199,10 @@ export default function LedgerHome() {
 
   const pagedEntries = allEntries.slice((entriesPage - 1) * PAGE_SIZE, entriesPage * PAGE_SIZE);
 
+  // Insert a group header row whenever the day changes within this
+  // page — separates "Today" / "Yesterday" / older entries visually.
+  let lastGroupLabel: string | null = null;
+
   return (
     <div style={{ padding: 16 }}>
       <div style={{ fontSize: 13, color: "#888" }}>{tr("ledger.totalBalance")}</div>
@@ -210,7 +222,9 @@ export default function LedgerHome() {
       {showAddContact && (
         <form onSubmit={handleAddContact} style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <input placeholder={tr("ledger.name")} value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <input placeholder={tr("ledger.phoneNumber")} value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+          <input placeholder={tr("ledger.mobileNumber")} value={newMobile} onChange={(e) => setNewMobile(e.target.value)} />
+          <input placeholder={tr("ledger.whatsappNumber")} value={newWhatsapp} onChange={(e) => setNewWhatsapp(e.target.value)} />
+          <input placeholder={tr("ledger.address")} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
           <button type="submit">{tr("ledger.save")}</button>
         </form>
       )}
@@ -243,7 +257,7 @@ export default function LedgerHome() {
           >
             <div>
               <div>{c.name}</div>
-              <div style={{ fontSize: 11, color: "#999" }}>{c.phone_number}</div>
+              {c.whatsapp_number && <div style={{ fontSize: 11, color: "#25D366" }}>{c.whatsapp_number}</div>}
             </div>
             <div style={{ color: c.balance >= 0 ? "#2e7d32" : "#b3261e", fontWeight: 500 }}>
               {formatNumber(Math.abs(c.balance))}
@@ -255,26 +269,36 @@ export default function LedgerHome() {
       <div style={{ marginTop: 24 }}>
         <h3 style={{ fontSize: 15 }}>{tr("ledger.allEntries")}</h3>
         {allEntries.length === 0 && <p style={{ color: "#888" }}>{tr("ledger.noEntries")}</p>}
-        {pagedEntries.map((entry) => (
-          <div
-            key={entry.client_id}
-            onClick={() => navigate(`/ledger/${entry.counterparty_id}`)}
-            style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee", cursor: "pointer" }}
-          >
-            <div>
-              <div>{entry.counterparty_name}</div>
-              <div style={{ fontSize: 11, color: "#999" }}>{new Date(entry.entry_date).toLocaleString()}</div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
-                {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+        {pagedEntries.map((entry) => {
+          const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
+          const showHeader = groupLabel !== lastGroupLabel;
+          lastGroupLabel = groupLabel;
+          return (
+            <div key={entry.client_id}>
+              {showHeader && (
+                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
+                  {groupLabel}
+                </div>
+              )}
+              <div
+                onClick={() => navigate(`/ledger/${entry.counterparty_id}`)}
+                style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee", cursor: "pointer" }}
+              >
+                <div>
+                  <div>{entry.counterparty_name}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
+                    {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+                  </div>
+                  <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                    {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
-              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <Pagination page={entriesPage} totalItems={allEntries.length} pageSize={PAGE_SIZE} onPageChange={setEntriesPage} />
       </div>
     </div>
