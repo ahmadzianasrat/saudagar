@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
+import Pagination from "../../components/Pagination";
+
+const PAGE_SIZE = 10;
 
 interface Commodity {
   id: string;
@@ -22,6 +25,21 @@ interface InventoryItem {
   todayPrice?: number | null;
 }
 
+interface TransactionRow {
+  id: string;
+  client_id: string;
+  inventory_item_id: string;
+  commodity_name?: string;
+  unit?: string;
+  transaction_type: "purchase" | "sale" | "adjustment";
+  quantity: number;
+  unit_cost: number | null;
+  transport_cost: number;
+  porter_fee: number;
+  created_at: string;
+  syncStatus?: "pending" | "synced" | "not_found";
+}
+
 // Surfaces today's market price against each item's own stock — the
 // "price against their own stock" differentiator decided on earlier,
 // not just a standalone price list.
@@ -31,10 +49,15 @@ export default function InventoryHome() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [commodities, setCommodities] = useState<Commodity[]>([]);
+  const [allTransactions, setAllTransactions] = useState<TransactionRow[]>([]);
+  const [txPage, setTxPage] = useState(1);
+
   const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
   const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment">("purchase");
   const [txQuantity, setTxQuantity] = useState("");
   const [txUnitCost, setTxUnitCost] = useState("");
+  const [txTransportCost, setTxTransportCost] = useState("");
+  const [txPorterFee, setTxPorterFee] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,7 +75,10 @@ export default function InventoryHome() {
   }, []);
 
   useEffect(() => {
-    if (profileId) loadItems();
+    if (profileId) {
+      loadItems();
+      loadTransactions();
+    }
   }, [profileId]);
 
   async function loadItems() {
@@ -62,11 +88,6 @@ export default function InventoryHome() {
       .eq("profile_id", profileId);
 
     if (invErr) {
-      // This was previously silently discarded — the likely cause of
-      // "entered items, showing nothing": inventory_items rows existed
-      // in the database, but this read was failing (RLS, join issue,
-      // etc.) with the error thrown away, always rendering an empty
-      // list regardless of what was actually in the table.
       console.error("failed to load inventory_items:", invErr);
       setError(`Couldn't load inventory: ${invErr.message}`);
       return;
@@ -92,30 +113,93 @@ export default function InventoryHome() {
     setItems(withPrices);
   }
 
+  // Combined, most-recent-first transaction history across every item —
+  // joins through inventory_items to get commodity name/unit for display.
+  async function loadTransactions() {
+    const { data: itemRows } = await supabase
+      .from("inventory_items")
+      .select("id, commodities(name_en, unit)")
+      .eq("profile_id", profileId);
+
+    const itemMeta = new Map((itemRows ?? []).map((r: any) => [r.id, { name: r.commodities?.name_en, unit: r.commodities?.unit }]));
+    const itemIds = (itemRows ?? []).map((r) => r.id);
+    if (itemIds.length === 0) {
+      setAllTransactions([]);
+      return;
+    }
+
+    const { data: txRows, error: txErr } = await supabase
+      .from("inventory_transactions")
+      .select("id, client_id, inventory_item_id, transaction_type, quantity, unit_cost, transport_cost, porter_fee, created_at")
+      .in("inventory_item_id", itemIds)
+      .order("created_at", { ascending: false });
+
+    if (txErr) {
+      console.error("failed to load inventory_transactions:", txErr);
+      setError(`Couldn't load transaction history: ${txErr.message}`);
+      return;
+    }
+
+    const withStatus = await Promise.all(
+      (txRows ?? []).map(async (row) => ({
+        ...row,
+        commodity_name: itemMeta.get(row.inventory_item_id)?.name,
+        unit: itemMeta.get(row.inventory_item_id)?.unit,
+        syncStatus: await getSyncStatus(row.client_id),
+      }))
+    );
+    setAllTransactions(withStatus);
+  }
+
   async function handleAddTransaction(itemId: string) {
     if (!profileId || !txQuantity) return;
     setError(null);
     const clientId = generateClientId();
     const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
 
-    await enqueueWrite("inventory_transactions", clientId, {
+    const payload = {
       client_id: clientId,
       inventory_item_id: itemId,
       transaction_type: txType,
       quantity: signedQty,
       unit_cost: txType === "purchase" ? Number(txUnitCost) || null : null,
-    });
+      transport_cost: txType === "purchase" ? Number(txTransportCost) || 0 : 0,
+      porter_fee: txType === "purchase" ? Number(txPorterFee) || 0 : 0,
+    };
 
-    // NOTE: recalculating avg_cost_per_unit and quantity on the
-    // inventory_items row itself is intentionally NOT done client-side —
-    // this should be a Postgres trigger on inventory_transactions insert
-    // (weighted average cost calc), so it stays correct even if writes
-    // arrive out of order from the offline queue. TODO: write that
-    // trigger as a follow-up migration before relying on this in
-    // production; for now this only records the transaction.
+    await enqueueWrite("inventory_transactions", clientId, payload);
+
+    const item = items.find((i) => i.id === itemId);
+    setAllTransactions((prev) => [
+      {
+        id: clientId,
+        client_id: clientId,
+        inventory_item_id: itemId,
+        commodity_name: item?.commodity_name,
+        unit: item?.unit,
+        transaction_type: txType,
+        quantity: signedQty,
+        unit_cost: payload.unit_cost,
+        transport_cost: payload.transport_cost,
+        porter_fee: payload.porter_fee,
+        created_at: new Date().toISOString(),
+        syncStatus: "pending",
+      },
+      ...prev,
+    ]);
+
+    // The item's own quantity/avg_cost_per_unit is recalculated
+    // server-side by the apply_inventory_transaction trigger (see
+    // 004_triggers.sql / 010_inventory_transaction_costs.sql) — that's
+    // authoritative, so re-fetch items to reflect the real new values
+    // rather than trying to replicate the weighted-average math here.
+    loadItems();
 
     setTxQuantity("");
     setTxUnitCost("");
+    setTxTransportCost("");
+    setTxPorterFee("");
+    setTxPage(1);
     setShowAddTransaction(null);
   }
 
@@ -135,6 +219,8 @@ export default function InventoryHome() {
     }
     loadItems();
   }
+
+  const pagedTransactions = allTransactions.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
 
   return (
     <div style={{ padding: 16 }}>
@@ -167,7 +253,11 @@ export default function InventoryHome() {
               </select>
               <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} />
               {txType === "purchase" && (
-                <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
+                <>
+                  <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
+                  <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} />
+                  <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} />
+                </>
               )}
               <button onClick={() => handleAddTransaction(item.id)}>{tr("inventory.save")}</button>
             </div>
@@ -184,6 +274,36 @@ export default function InventoryHome() {
               + {c.name_en}
             </button>
           ))}
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <h3 style={{ fontSize: 15 }}>{tr("inventory.allTransactions")}</h3>
+        {allTransactions.length === 0 && <p style={{ color: "#888" }}>{tr("inventory.noTransactions")}</p>}
+        {pagedTransactions.map((tx) => (
+          <div key={tx.client_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+            <div>
+              <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
+              <div style={{ fontSize: 11, color: "#999" }}>{new Date(tx.created_at).toLocaleString()}</div>
+              {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
+                <div style={{ fontSize: 11, color: "#999" }}>
+                  {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
+                </div>
+              )}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
+                {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
+              </div>
+              {tx.unit_cost !== null && (
+                <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+              )}
+              <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+              </div>
+            </div>
+          </div>
+        ))}
+        <Pagination page={txPage} totalItems={allTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
       </div>
     </div>
   );

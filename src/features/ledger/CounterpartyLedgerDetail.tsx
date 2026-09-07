@@ -5,6 +5,9 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
+import Pagination from "../../components/Pagination";
+
+const PAGE_SIZE = 10;
 
 interface LedgerEntry {
   id: string;
@@ -34,6 +37,7 @@ export default function CounterpartyLedgerDetail() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -115,7 +119,10 @@ export default function CounterpartyLedgerDetail() {
     setAmount("");
     setNote("");
     setShowNewEntry(false);
+    setPage(1);
   }
+
+  const pagedEntries = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div style={{ padding: 16 }}>
@@ -158,7 +165,7 @@ export default function CounterpartyLedgerDetail() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        {entries.map((entry) => (
+        {pagedEntries.map((entry) => (
           <div key={entry.client_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
             <div>
               <div style={{ fontSize: 11, color: "#999" }}>{new Date(entry.entry_date).toLocaleString()}</div>
@@ -174,6 +181,7 @@ export default function CounterpartyLedgerDetail() {
             </div>
           </div>
         ))}
+        <Pagination page={page} totalItems={entries.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </div>
   );

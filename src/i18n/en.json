@@ -70,5 +70,16 @@
   "password.success": "Password changed successfully.",
   "password.error": "Something went wrong. Try again.",
   "ledger.addContact": "+ Add Contact",
-  "ledger.noContacts": "No contacts yet. Add one to get started."
+  "ledger.noContacts": "No contacts yet. Add one to get started.",
+  "ledger.quickEntry": "Quick Entry",
+  "ledger.selectContact": "Select contact",
+  "ledger.allEntries": "All Entries",
+  "ledger.noEntries": "No entries yet.",
+  "pagination.prev": "Previous",
+  "pagination.next": "Next",
+  "pagination.pageOf": "Page {current} of {total}",
+  "inventory.allTransactions": "All Transactions",
+  "inventory.transportCost": "Transport cost (optional)",
+  "inventory.porterFee": "Porter/worker fee (optional)",
+  "inventory.noTransactions": "No transactions yet."
 }

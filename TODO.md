@@ -173,3 +173,25 @@ see section 1 and 2.**
 4. WhatsApp "send today's entries" export button (still open)
 5. In-app policy content screen (still open)
 6. Once the above is solid: onboard your price-uploader on the live admin panel, do one real HesabPay test transaction, then start onboarding real shop owners
+
+---
+
+## 17. Ledger + Inventory feature additions (this round)
+
+### Ledger
+- [x] Quick Entry restored on the main Ledger page — select an existing contact from a dropdown, add an entry directly, without navigating into their detail page. Their balance in the contact list updates immediately.
+- [x] New paginated "All Entries" table on the main Ledger page — combined across every contact, most recent first, 10/page, tapping a row jumps to that contact's detail page
+- [x] Pagination also added to the per-contact detail view's entry list (10/page) — previously unbounded
+
+### Inventory
+- [x] New paginated "All Transactions" table — combined across every commodity, most recent first, 10/page, shows type/quantity/unit cost/extra costs per row
+- [x] Purchase transactions now have optional **transport cost** and **porter/worker fee** fields
+- [x] `010_inventory_transaction_costs.sql` — added `transport_cost`/`porter_fee` columns and updated the weighted-average-cost trigger to fold BOTH into `avg_cost_per_unit` on a purchase, not just the per-unit price. This means "how much it costs me" now reflects true landed cost (goods + getting them to the shop), which is what actually matters for margin decisions.
+- [x] `InventoryHome.tsx` now re-fetches items after every transaction rather than guessing the new average client-side — the trigger is the authoritative source of truth for that math, so the UI just reflects it rather than duplicating it
+
+### Shared
+- [x] New reusable `Pagination.tsx` component (client-side, slices an already-fetched array) — used in all three tables above. Worth revisiting with server-side `range()` pagination later if any single shop's history grows large enough that fetching everything up front becomes slow, but fine at current scale.
+
+- [ ] **Run migration `010_inventory_transaction_costs.sql`**
+- [ ] Redeploy is NOT needed for this round — no Edge Functions changed, only the app/admin-panel code and one migration
+- [ ] Test: add a purchase with transport cost + porter fee, confirm the item's avg cost reflects all three components combined, not just the unit price

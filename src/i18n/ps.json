@@ -70,5 +70,16 @@
   "password.success": "پټ نوم په بریالیتوب سره بدل شو.",
   "password.error": "یو څه غلط شول. بیا هڅه وکړئ.",
   "ledger.addContact": "+ اړیکه اضافه کړئ",
-  "ledger.noContacts": "لا تر اوسه هېڅ اړیکه نشته. د پیل لپاره یو اضافه کړئ."
+  "ledger.noContacts": "لا تر اوسه هېڅ اړیکه نشته. د پیل لپاره یو اضافه کړئ.",
+  "ledger.quickEntry": "چټکه ليکنه",
+  "ledger.selectContact": "اړیکه غوره کړئ",
+  "ledger.allEntries": "ټولې ليکنې",
+  "ledger.noEntries": "لا تر اوسه هېڅ ليکنه نشته.",
+  "pagination.prev": "پخوانی",
+  "pagination.next": "بل",
+  "pagination.pageOf": "پاڼه {current} د {total}",
+  "inventory.allTransactions": "ټولې معاملې",
+  "inventory.transportCost": "د لېږد لګښت (اختیاري)",
+  "inventory.porterFee": "د بارکش/کارګر مزد (اختیاري)",
+  "inventory.noTransactions": "لا تر اوسه هېڅ معامله نشته."
 }

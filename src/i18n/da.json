@@ -70,5 +70,16 @@
   "password.success": "رمز عبور با موفقیت تغییر کرد.",
   "password.error": "مشکلی پیش آمد. دوباره تلاش کنید.",
   "ledger.addContact": "+ افزودن مخاطب",
-  "ledger.noContacts": "هنوز مخاطبی وجود ندارد. برای شروع یکی اضافه کنید."
+  "ledger.noContacts": "هنوز مخاطبی وجود ندارد. برای شروع یکی اضافه کنید.",
+  "ledger.quickEntry": "ثبت سریع",
+  "ledger.selectContact": "انتخاب مخاطب",
+  "ledger.allEntries": "همه ثبت‌ها",
+  "ledger.noEntries": "هنوز ثبتی وجود ندارد.",
+  "pagination.prev": "قبلی",
+  "pagination.next": "بعدی",
+  "pagination.pageOf": "صفحه {current} از {total}",
+  "inventory.allTransactions": "همه معاملات",
+  "inventory.transportCost": "هزینه حمل‌ونقل (اختیاری)",
+  "inventory.porterFee": "مزد باربر/کارگر (اختیاری)",
+  "inventory.noTransactions": "هنوز معامله‌ای وجود ندارد."
 }
