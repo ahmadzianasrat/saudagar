@@ -2,12 +2,13 @@ import { useState } from "react";
 import AccountRequestsScreen from "./AccountRequestsScreen";
 import PriceUploadScreen from "./PriceUploadScreen";
 import ManualPaymentsScreen from "./ManualPaymentsScreen";
+import UsersScreen from "./UsersScreen";
 import AdminLoginScreen from "./AdminLoginScreen";
 import { useAdminAuth } from "./useAdminAuth";
 
 export default function App() {
   const { isAuthenticated, isAuthorizedAdmin, notAnAdmin, admin, loading, signOut } = useAdminAuth();
-  const [tab, setTab] = useState<"requests" | "prices" | "payments">("requests");
+  const [tab, setTab] = useState<"requests" | "prices" | "payments" | "users">("requests");
 
   if (loading) {
     return <div style={{ padding: 16 }}>Loading…</div>;
@@ -47,6 +48,11 @@ export default function App() {
             Manual Payments
           </button>
         )}
+        {canApprove && (
+          <button style={{ flex: 1, padding: 12 }} onClick={() => setTab("users")}>
+            Users
+          </button>
+        )}
         {canUploadPrices && (
           <button style={{ flex: 1, padding: 12 }} onClick={() => setTab("prices")}>
             Upload Prices
@@ -63,6 +69,7 @@ export default function App() {
 
       {tab === "requests" && canApprove && <AccountRequestsScreen />}
       {tab === "payments" && canApprove && <ManualPaymentsScreen />}
+      {tab === "users" && canApprove && <UsersScreen />}
       {tab === "prices" && canUploadPrices && <PriceUploadScreen />}
     </div>
   );

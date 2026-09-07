@@ -154,15 +154,28 @@ export default function InventoryHome() {
   async function handleAddTransaction(itemId: string) {
     if (!profileId || !txQuantity) return;
     setError(null);
+
+    // Price is required for purchase (cost basis) and sale (revenue
+    // record) — only adjustments (pure quantity corrections) skip it.
+    if ((txType === "purchase" || txType === "sale") && !txUnitCost) {
+      setError(tr("inventory.priceRequired"));
+      return;
+    }
+
     const clientId = generateClientId();
     const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
 
+    // unit_cost is reused for both purchase cost AND sale price —
+    // the apply_inventory_transaction trigger only reads it for
+    // purchases when recalculating avg_cost_per_unit, so storing a
+    // sale price here doesn't affect the item's cost basis. It's
+    // still useful as a record of what the sale actually went for.
     const payload = {
       client_id: clientId,
       inventory_item_id: itemId,
       transaction_type: txType,
       quantity: signedQty,
-      unit_cost: txType === "purchase" ? Number(txUnitCost) || null : null,
+      unit_cost: txType !== "adjustment" ? Number(txUnitCost) || null : null,
       transport_cost: txType === "purchase" ? Number(txTransportCost) || 0 : 0,
       porter_fee: txType === "purchase" ? Number(txPorterFee) || 0 : 0,
     };
@@ -259,6 +272,9 @@ export default function InventoryHome() {
                   <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} />
                 </>
               )}
+              {txType === "sale" && (
+                <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required />
+              )}
               <button onClick={() => handleAddTransaction(item.id)}>{tr("inventory.save")}</button>
             </div>
           )}
@@ -295,7 +311,12 @@ export default function InventoryHome() {
                 {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
               </div>
               {tx.unit_cost !== null && (
-                <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+                <>
+                  <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>
+                    {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                  </div>
+                </>
               )}
               <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
                 {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}

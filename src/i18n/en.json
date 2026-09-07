@@ -81,5 +81,9 @@
   "inventory.allTransactions": "All Transactions",
   "inventory.transportCost": "Transport cost (optional)",
   "inventory.porterFee": "Porter/worker fee (optional)",
-  "inventory.noTransactions": "No transactions yet."
+  "inventory.noTransactions": "No transactions yet.",
+  "inventory.salePrice": "Sale price (per unit)",
+  "inventory.totalAmount": "Total",
+  "inventory.priceRequired": "Please enter a price.",
+  "auth.forgotPassword": "Forgot your password? Contact your shop's Saudagar admin to reset it."
 }

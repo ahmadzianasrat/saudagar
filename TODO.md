@@ -195,3 +195,34 @@ see section 1 and 2.**
 - [ ] **Run migration `010_inventory_transaction_costs.sql`**
 - [ ] Redeploy is NOT needed for this round — no Edge Functions changed, only the app/admin-panel code and one migration
 - [ ] Test: add a purchase with transport cost + porter fee, confirm the item's avg cost reflects all three components combined, not just the unit price
+
+---
+
+## 18. Sale price + forgot password (this round)
+
+### Inventory sale price
+- [x] Sale transactions now require a price (per unit) — previously only purchases had any price field
+- [x] Reused the existing `unit_cost` column for sale price rather than adding a new one — the cost-basis trigger only reads it for purchases, so this doesn't affect `avg_cost_per_unit`, it's just a revenue record
+- [x] Transaction history now shows a computed total (price × quantity) for both purchases and sales
+- [ ] **Not built yet, worth considering later**: profit-per-sale (sale price vs. cost basis at time of sale) — would need snapshotting the item's avg cost onto the transaction row at sale time, since the item's average keeps changing afterward. Flagging as a real gap, not implementing now since it wasn't asked for.
+
+### Forgot password
+- [x] Since login uses a synthetic email with no real inbox, a standard email-reset link can't work — implemented the same pattern as account creation: shop owner contacts the admin, admin resets from the panel
+- [x] `011_admin_read_profiles.sql` — admins with `can_approve_accounts` can now read the full profiles list (needed to look someone up), no write access added
+- [x] `admin-reset-password` Edge Function — generates a new password, updates it via Supabase's admin API, returns it for the admin to relay via WhatsApp
+- [x] New `UsersScreen.tsx` (admin panel, new "Users" tab) — searchable list of active shop accounts with a Reset Password button per row
+- [x] `LoginScreen.tsx` now shows a hint: "Forgot your password? Contact your shop's Saudagar admin to reset it."
+- [ ] **Run migration `011_admin_read_profiles.sql`**
+- [ ] **Deploy `admin-reset-password`**
+- [ ] Test: search for your own test account in the new Users tab, reset its password, confirm login works with the new one
+
+---
+
+## What's next after this round
+
+1. Run migration 011, deploy admin-reset-password, redeploy nothing else (no other functions changed)
+2. Test sale-price entry and the password reset flow end-to-end
+3. **Real-device offline testing** — still the largest untested area: go offline, add ledger/inventory entries (including the new quick-entry and sale-price flows), reconnect, confirm sync
+4. **WhatsApp "send today's entries" export** — still on the list, not yet built
+5. **In-app policy content screen** — markdown files exist, not routed into the app
+6. Once the above feels solid: onboard your price-uploader for real, complete one full real HesabPay payment end-to-end (session creation is confirmed working, but the webhook → active subscription half has never been tested with a real completed payment), then start onboarding real shop owners

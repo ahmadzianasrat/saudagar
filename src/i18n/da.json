@@ -81,5 +81,9 @@
   "inventory.allTransactions": "همه معاملات",
   "inventory.transportCost": "هزینه حمل‌ونقل (اختیاری)",
   "inventory.porterFee": "مزد باربر/کارگر (اختیاری)",
-  "inventory.noTransactions": "هنوز معامله‌ای وجود ندارد."
+  "inventory.noTransactions": "هنوز معامله‌ای وجود ندارد.",
+  "inventory.salePrice": "قیمت فروش (به ازای هر واحد)",
+  "inventory.totalAmount": "مجموع",
+  "inventory.priceRequired": "لطفاً یک قیمت وارد کنید.",
+  "auth.forgotPassword": "رمز عبور خود را فراموش کرده‌اید؟ برای بازنشانی با مسئول سوداگر خود تماس بگیرید."
 }

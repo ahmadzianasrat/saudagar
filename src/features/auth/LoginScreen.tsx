@@ -53,6 +53,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) 
       <button type="submit" disabled={loading}>
         {loading ? "..." : tr("auth.loginButton")}
       </button>
+      <p style={{ fontSize: 12, color: "#888", textAlign: "center" }}>{tr("auth.forgotPassword")}</p>
       {/* TODO: link to RequestAccessScreen for users who haven't been approved yet */}
     </form>
   );

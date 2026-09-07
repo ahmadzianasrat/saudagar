@@ -81,5 +81,9 @@
   "inventory.allTransactions": "ټولې معاملې",
   "inventory.transportCost": "د لېږد لګښت (اختیاري)",
   "inventory.porterFee": "د بارکش/کارګر مزد (اختیاري)",
-  "inventory.noTransactions": "لا تر اوسه هېڅ معامله نشته."
+  "inventory.noTransactions": "لا تر اوسه هېڅ معامله نشته.",
+  "inventory.salePrice": "د پلور بیه (هره واحده)",
+  "inventory.totalAmount": "ټول",
+  "inventory.priceRequired": "مهرباني وکړئ بیه ولیکئ.",
+  "auth.forgotPassword": "پټ نوم مو هېر شوی؟ د بیا تنظیم لپاره له خپل د سوداګر مسؤل سره اړیکه ونیسئ."
 }
