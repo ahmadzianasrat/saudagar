@@ -3,12 +3,13 @@ import AccountRequestsScreen from "./AccountRequestsScreen";
 import PriceUploadScreen from "./PriceUploadScreen";
 import ManualPaymentsScreen from "./ManualPaymentsScreen";
 import UsersScreen from "./UsersScreen";
+import AdminManagementScreen from "./AdminManagementScreen";
 import AdminLoginScreen from "./AdminLoginScreen";
 import { useAdminAuth } from "./useAdminAuth";
 
 export default function App() {
   const { isAuthenticated, isAuthorizedAdmin, notAnAdmin, admin, loading, signOut } = useAdminAuth();
-  const [tab, setTab] = useState<"requests" | "prices" | "payments" | "users">("requests");
+  const [tab, setTab] = useState<"requests" | "prices" | "payments" | "users" | "admins">("requests");
 
   if (loading) {
     return <div style={{ padding: 16 }}>Loading…</div>;
@@ -27,8 +28,12 @@ export default function App() {
     );
   }
 
-  const canApprove = admin!.can_approve_accounts;
-  const canUploadPrices = admin!.allowed_markets.length > 0;
+  // Super admin automatically has full authority in the UI too, not
+  // just at the RLS/Edge Function level — no manual permission
+  // assignment needed for the account that IS the super admin.
+  const isSuperAdmin = admin!.role === "super_admin";
+  const canApprove = isSuperAdmin || admin!.can_approve_accounts;
+  const canUploadPrices = isSuperAdmin || admin!.allowed_markets.length > 0;
 
   return (
     <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto" }}>
@@ -37,7 +42,7 @@ export default function App() {
         <button onClick={signOut} style={{ fontSize: 12 }}>Log Out</button>
       </div>
 
-      <div style={{ display: "flex", borderBottom: "1px solid #ddd" }}>
+      <div style={{ display: "flex", borderBottom: "1px solid #ddd", flexWrap: "wrap" }}>
         {canApprove && (
           <button style={{ flex: 1, padding: 12 }} onClick={() => setTab("requests")}>
             Account Requests
@@ -58,6 +63,11 @@ export default function App() {
             Upload Prices
           </button>
         )}
+        {isSuperAdmin && (
+          <button style={{ flex: 1, padding: 12 }} onClick={() => setTab("admins")}>
+            Admins
+          </button>
+        )}
       </div>
 
       {!canApprove && !canUploadPrices && (
@@ -71,6 +81,7 @@ export default function App() {
       {tab === "payments" && canApprove && <ManualPaymentsScreen />}
       {tab === "users" && canApprove && <UsersScreen />}
       {tab === "prices" && canUploadPrices && <PriceUploadScreen />}
+      {tab === "admins" && isSuperAdmin && <AdminManagementScreen />}
     </div>
   );
 }

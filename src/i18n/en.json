@@ -102,5 +102,21 @@
   "currency.to": "To",
   "currency.editRates": "Edit exchange rates",
   "currency.ratesNote": "Rates are set by you and stored on this device — not live market rates. Update them as needed.",
-  "currency.rateFor": "1 AFN ="
+  "currency.rateFor": "1 AFN =",
+  "time.justNow": "just now",
+  "time.minutesAgo": "{count} min ago",
+  "time.hoursAgo": "{count} hr ago",
+  "time.daysAgo": "{count} days ago",
+  "time.monthsAgo": "{count} months ago",
+  "time.yearsAgo": "{count} years ago",
+  "common.edit": "Edit",
+  "common.save": "Save",
+  "common.cancel": "Cancel",
+  "common.delete": "Delete",
+  "inventory.adjustmentHint": "Enter a positive number to increase stock, negative to decrease (e.g. for loss or spoilage).",
+  "prices.recentActivity": "Recent Price Activity",
+  "currency.usdRate": "1 USD = ? AFN",
+  "currency.afnToPkrRate": "1000 AFN = ? PKR",
+  "currency.pkrToAfnRate": "1000 PKR = ? AFN",
+  "currency.useThisRate": "Use this rate for AFN ↔ PKR"
 }

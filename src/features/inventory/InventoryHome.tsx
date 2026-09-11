@@ -4,7 +4,7 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
-import { dateGroupLabel, formatDateTime } from "../../lib/dateFormat";
+import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -41,9 +41,6 @@ interface TransactionRow {
   syncStatus?: "pending" | "synced" | "not_found";
 }
 
-// Surfaces today's market price against each item's own stock — the
-// "price against their own stock" differentiator decided on earlier,
-// not just a standalone price list.
 export default function InventoryHome() {
   const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
@@ -60,6 +57,14 @@ export default function InventoryHome() {
   const [txTransportCost, setTxTransportCost] = useState("");
   const [txPorterFee, setTxPorterFee] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Transaction editing
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [editTxType, setEditTxType] = useState<"purchase" | "sale" | "adjustment">("purchase");
+  const [editTxQuantity, setEditTxQuantity] = useState("");
+  const [editTxUnitCost, setEditTxUnitCost] = useState("");
+  const [editTxTransportCost, setEditTxTransportCost] = useState("");
+  const [editTxPorterFee, setEditTxPorterFee] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -114,8 +119,6 @@ export default function InventoryHome() {
     setItems(withPrices);
   }
 
-  // Combined, most-recent-first transaction history across every item —
-  // joins through inventory_items to get commodity name/unit for display.
   async function loadTransactions() {
     const { data: itemRows } = await supabase
       .from("inventory_items")
@@ -156,23 +159,22 @@ export default function InventoryHome() {
     if (!profileId || !txQuantity) return;
     setError(null);
 
-    // Price is required for purchase (cost basis) and sale (revenue
-    // record) — only adjustments (pure quantity corrections) skip it.
     if ((txType === "purchase" || txType === "sale") && !txUnitCost) {
       setError(tr("inventory.priceRequired"));
       return;
     }
 
     const clientId = generateClientId();
-    const signedQty = txType === "sale" ? -Math.abs(Number(txQuantity)) : Math.abs(Number(txQuantity));
+    // FIX: adjustments now accept a signed value directly (e.g. -5 to
+    // decrease stock for spoilage/loss, 5 to increase after a recount)
+    // — previously this always forced a positive value, making a
+    // decrease impossible to record. Purchase/sale still force their
+    // fixed direction regardless of what's typed.
+    const signedQty =
+      txType === "sale" ? -Math.abs(Number(txQuantity))
+      : txType === "adjustment" ? Number(txQuantity)
+      : Math.abs(Number(txQuantity));
 
-    // unit_cost is reused for both purchase cost AND sale price —
-    // the apply_inventory_transaction trigger only reads unit_cost,
-    // transport_cost, and porter_fee for PURCHASES when recalculating
-    // avg_cost_per_unit — so any of these entered on a SALE are
-    // recorded for your own reference (what this sale actually cost
-    // to fulfill/deliver) but deliberately do NOT change the item's
-    // average acquisition cost shown on the main inventory page.
     const payload = {
       client_id: clientId,
       inventory_item_id: itemId,
@@ -184,6 +186,10 @@ export default function InventoryHome() {
     };
 
     await enqueueWrite("inventory_transactions", clientId, payload);
+
+    // enqueueWrite now awaits the actual sync attempt — re-check
+    // status immediately instead of hardcoding "pending".
+    const syncStatus = await getSyncStatus(clientId);
 
     const item = items.find((i) => i.id === itemId);
     setAllTransactions((prev) => [
@@ -199,16 +205,11 @@ export default function InventoryHome() {
         transport_cost: payload.transport_cost,
         porter_fee: payload.porter_fee,
         created_at: new Date().toISOString(),
-        syncStatus: "pending",
+        syncStatus,
       },
       ...prev,
     ]);
 
-    // The item's own quantity/avg_cost_per_unit is recalculated
-    // server-side by the apply_inventory_transaction trigger (see
-    // 004_triggers.sql / 010_inventory_transaction_costs.sql) — that's
-    // authoritative, so re-fetch items to reflect the real new values
-    // rather than trying to replicate the weighted-average math here.
     loadItems();
 
     setTxQuantity("");
@@ -217,6 +218,52 @@ export default function InventoryHome() {
     setTxPorterFee("");
     setTxPage(1);
     setShowAddTransaction(null);
+  }
+
+  function startEditTx(tx: TransactionRow) {
+    setEditingTxId(tx.client_id);
+    setEditTxType(tx.transaction_type);
+    setEditTxQuantity(String(Math.abs(tx.quantity)));
+    setEditTxUnitCost(tx.unit_cost !== null ? String(tx.unit_cost) : "");
+    setEditTxTransportCost(String(tx.transport_cost));
+    setEditTxPorterFee(String(tx.porter_fee));
+  }
+
+  async function handleSaveTx(tx: TransactionRow) {
+    const signedQty =
+      editTxType === "sale" ? -Math.abs(Number(editTxQuantity))
+      : editTxType === "adjustment" ? Number(editTxQuantity)
+      : Math.abs(Number(editTxQuantity));
+
+    const updates = {
+      transaction_type: editTxType,
+      quantity: signedQty,
+      unit_cost: editTxType !== "adjustment" ? Number(editTxUnitCost) || null : null,
+      transport_cost: editTxType !== "adjustment" ? Number(editTxTransportCost) || 0 : 0,
+      porter_fee: editTxType !== "adjustment" ? Number(editTxPorterFee) || 0 : 0,
+    };
+
+    // Direct update (not offline-queued), same reasoning as ledger
+    // entry edits — a correction is less time-critical than a new
+    // record. The recompute_inventory_item trigger (013 migration)
+    // fires on UPDATE too, so the item's quantity/avg_cost stays
+    // correct automatically.
+    const { error: updateErr } = await supabase
+      .from("inventory_transactions")
+      .update(updates)
+      .eq("id", tx.id);
+
+    if (updateErr) {
+      console.error("failed to update transaction:", updateErr);
+      setError("Couldn't save changes — check your connection and try again.");
+      return;
+    }
+
+    setAllTransactions((prev) =>
+      prev.map((t) => (t.client_id === tx.client_id ? { ...t, ...updates } : t))
+    );
+    setEditingTxId(null);
+    loadItems(); // reflect the trigger's recalculated quantity/avg cost
   }
 
   async function addNewCommodityToInventory(commodityId: string) {
@@ -269,6 +316,9 @@ export default function InventoryHome() {
                 <option value="adjustment">{tr("inventory.adjustment")}</option>
               </select>
               <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} />
+              {txType === "adjustment" && (
+                <p style={{ fontSize: 11, color: "#888", margin: 0 }}>{tr("inventory.adjustmentHint")}</p>
+              )}
               {txType === "purchase" && (
                 <>
                   <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
@@ -307,6 +357,8 @@ export default function InventoryHome() {
           const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
           const showHeader = groupLabel !== lastGroupLabel;
           lastGroupLabel = groupLabel;
+          const isEditing = editingTxId === tx.client_id;
+
           return (
             <div key={tx.client_id}>
               {showHeader && (
@@ -314,33 +366,61 @@ export default function InventoryHome() {
                   {groupLabel}
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                <div>
-                  <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
-                  <div style={{ fontSize: 11, color: "#999" }}>{formatDateTime(tx.created_at, dateSystem, digitStyle)}</div>
-                  {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
+
+              {!isEditing && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                  <div>
+                    <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
                     <div style={{ fontSize: 11, color: "#999" }}>
-                      {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
+                      {formatDateTime(tx.created_at, dateSystem, digitStyle)} · {timeAgo(tx.created_at, tr)}
                     </div>
-                  )}
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
-                    {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
-                  </div>
-                  {tx.unit_cost !== null && (
-                    <>
-                      <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+                    {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
                       <div style={{ fontSize: 11, color: "#999" }}>
-                        {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                        {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
                       </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
+                      {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
+                    </div>
+                    {tx.unit_cost !== null && (
+                      <>
+                        <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
+                        <div style={{ fontSize: 11, color: "#999" }}>
+                          {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                        </div>
+                      </>
+                    )}
+                    <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                      {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                    </div>
+                    <button onClick={() => startEditTx(tx)} style={{ fontSize: 11, marginTop: 4 }}>{tr("common.edit")}</button>
+                  </div>
+                </div>
+              )}
+
+              {isEditing && (
+                <div style={{ display: "grid", gap: 6, padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                  <select value={editTxType} onChange={(e) => setEditTxType(e.target.value as any)}>
+                    <option value="purchase">{tr("inventory.purchase")}</option>
+                    <option value="sale">{tr("inventory.sale")}</option>
+                    <option value="adjustment">{tr("inventory.adjustment")}</option>
+                  </select>
+                  <input type="number" value={editTxQuantity} onChange={(e) => setEditTxQuantity(e.target.value)} placeholder={tr("inventory.quantity")} />
+                  {editTxType !== "adjustment" && (
+                    <>
+                      <input type="number" value={editTxUnitCost} onChange={(e) => setEditTxUnitCost(e.target.value)} placeholder={tr("inventory.unitCost")} />
+                      <input type="number" value={editTxTransportCost} onChange={(e) => setEditTxTransportCost(e.target.value)} placeholder={tr("inventory.transportCost")} />
+                      <input type="number" value={editTxPorterFee} onChange={(e) => setEditTxPorterFee(e.target.value)} placeholder={tr("inventory.porterFee")} />
                     </>
                   )}
-                  <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                    {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => handleSaveTx(tx)}>{tr("common.save")}</button>
+                    <button onClick={() => setEditingTxId(null)}>{tr("common.cancel")}</button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}

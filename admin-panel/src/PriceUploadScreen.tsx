@@ -36,9 +36,17 @@ export default function PriceUploadScreen() {
 
     const { data: admin } = await supabase
       .from("admin_users")
-      .select("allowed_markets")
+      .select("allowed_markets, role")
       .eq("id", userData.user.id)
       .single();
+
+    // Super admins see every market, not just their allowed_markets
+    // array — automatic full authority, no manual assignment needed.
+    if (admin?.role === "super_admin") {
+      const { data: allMarkets } = await supabase.from("markets").select("id, name_en");
+      setMarkets(allMarkets ?? []);
+      return;
+    }
 
     const allowedIds = admin?.allowed_markets ?? [];
 

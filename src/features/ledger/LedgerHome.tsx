@@ -5,7 +5,7 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
-import { dateGroupLabel } from "../../lib/dateFormat";
+import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -167,6 +167,11 @@ export default function LedgerHome() {
       entry_date: new Date().toISOString(),
     });
 
+    // enqueueWrite now awaits the actual sync attempt — re-check
+    // status immediately rather than hardcoding "pending", fixing the
+    // "only synced after refresh" symptom.
+    const syncStatus = await getSyncStatus(clientId);
+
     const contactName = contacts.find((c) => c.id === quickContactId)?.name;
     setContacts((prev) =>
       prev.map((c) =>
@@ -185,7 +190,7 @@ export default function LedgerHome() {
         amount: Number(quickAmount),
         note: quickNote,
         entry_date: new Date().toISOString(),
-        syncStatus: "pending",
+        syncStatus,
       },
       ...prev,
     ]);
@@ -286,6 +291,7 @@ export default function LedgerHome() {
               >
                 <div>
                   <div>{entry.counterparty_name}</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>{timeAgo(entry.entry_date, tr)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>

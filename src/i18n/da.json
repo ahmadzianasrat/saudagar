@@ -102,5 +102,21 @@
   "currency.to": "به",
   "currency.editRates": "ویرایش نرخ‌های تبدیل",
   "currency.ratesNote": "نرخ‌ها توسط شما تنظیم و روی این دستگاه ذخیره می‌شوند — نرخ زنده بازار نیستند.",
-  "currency.rateFor": "۱ افغانی ="
+  "currency.rateFor": "۱ افغانی =",
+  "time.justNow": "همین حالا",
+  "time.minutesAgo": "{count} دقیقه پیش",
+  "time.hoursAgo": "{count} ساعت پیش",
+  "time.daysAgo": "{count} روز پیش",
+  "time.monthsAgo": "{count} ماه پیش",
+  "time.yearsAgo": "{count} سال پیش",
+  "common.edit": "ویرایش",
+  "common.save": "ذخیره",
+  "common.cancel": "لغو",
+  "common.delete": "حذف",
+  "inventory.adjustmentHint": "برای افزایش موجودی عدد مثبت وارد کنید، برای کاهش عدد منفی (مثلاً به دلیل ضایعات).",
+  "prices.recentActivity": "فعالیت اخیر قیمت",
+  "currency.usdRate": "۱ دالر = ؟ افغانی",
+  "currency.afnToPkrRate": "۱۰۰۰ افغانی = ؟ کلدار",
+  "currency.pkrToAfnRate": "۱۰۰۰ کلدار = ؟ افغانی",
+  "currency.useThisRate": "این نرخ را برای افغانی ↔ کلدار استفاده کن"
 }

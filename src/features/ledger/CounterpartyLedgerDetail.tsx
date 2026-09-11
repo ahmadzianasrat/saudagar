@@ -5,7 +5,7 @@ import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
-import { dateGroupLabel, formatDateTime } from "../../lib/dateFormat";
+import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -43,6 +43,19 @@ export default function CounterpartyLedgerDetail() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
+  // Contact editing
+  const [editingContact, setEditingContact] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editMobile, setEditMobile] = useState("");
+  const [editWhatsapp, setEditWhatsapp] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+
+  // Entry editing
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editEntryType, setEditEntryType] = useState<"credit" | "debit">("credit");
+  const [editEntryAmount, setEditEntryAmount] = useState("");
+  const [editEntryNote, setEditEntryNote] = useState("");
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setProfileId(data.user.id);
@@ -62,7 +75,13 @@ export default function CounterpartyLedgerDetail() {
       .select("name, phone_number, whatsapp_number, address")
       .eq("id", counterpartyId)
       .single();
-    if (data) setContact(data);
+    if (data) {
+      setContact(data);
+      setEditName(data.name);
+      setEditMobile(data.phone_number);
+      setEditWhatsapp(data.whatsapp_number ?? "");
+      setEditAddress(data.address ?? "");
+    }
   }
 
   async function loadEntries() {
@@ -104,6 +123,12 @@ export default function CounterpartyLedgerDetail() {
       entry_date: new Date().toISOString(),
     });
 
+    // enqueueWrite now awaits the actual sync attempt (see
+    // offlineQueue.ts) — re-check status immediately instead of
+    // hardcoding "pending", so the indicator is correct without
+    // needing a page reload.
+    const syncStatus = await getSyncStatus(clientId);
+
     setEntries((prev) => [
       {
         id: clientId,
@@ -112,7 +137,7 @@ export default function CounterpartyLedgerDetail() {
         amount: Number(amount),
         note,
         entry_date: new Date().toISOString(),
-        syncStatus: "pending",
+        syncStatus,
       },
       ...prev,
     ]);
@@ -121,6 +146,68 @@ export default function CounterpartyLedgerDetail() {
     setNote("");
     setShowNewEntry(false);
     setPage(1);
+  }
+
+  async function handleSaveContact(e: FormEvent) {
+    e.preventDefault();
+    if (!counterpartyId) return;
+
+    const { error: updateErr } = await supabase
+      .from("counterparties")
+      .update({
+        name: editName,
+        phone_number: editMobile,
+        whatsapp_number: editWhatsapp || null,
+        address: editAddress || null,
+      })
+      .eq("id", counterpartyId);
+
+    if (updateErr) {
+      console.error("failed to update contact:", updateErr);
+      setError("Couldn't save contact changes.");
+      return;
+    }
+
+    setContact({ name: editName, phone_number: editMobile, whatsapp_number: editWhatsapp || null, address: editAddress || null });
+    setEditingContact(false);
+  }
+
+  function startEditEntry(entry: LedgerEntry) {
+    setEditingEntryId(entry.client_id);
+    setEditEntryType(entry.entry_type);
+    setEditEntryAmount(String(entry.amount));
+    setEditEntryNote(entry.note ?? "");
+  }
+
+  async function handleSaveEntry(entry: LedgerEntry) {
+    // Edits go straight to Supabase (not through the offline queue) —
+    // correcting an existing entry is a less time-critical action than
+    // recording a new one, and this keeps the offline-write path
+    // simple (insert-only, no update-merge logic to get right).
+    const { error: updateErr } = await supabase
+      .from("ledger_entries")
+      .update({
+        entry_type: editEntryType,
+        amount: Number(editEntryAmount),
+        note: editEntryNote || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entry.id);
+
+    if (updateErr) {
+      console.error("failed to update entry:", updateErr);
+      setError("Couldn't save changes — check your connection and try again.");
+      return;
+    }
+
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.client_id === entry.client_id
+          ? { ...e, entry_type: editEntryType, amount: Number(editEntryAmount), note: editEntryNote }
+          : e
+      )
+    );
+    setEditingEntryId(null);
   }
 
   const pagedEntries = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -134,9 +221,12 @@ export default function CounterpartyLedgerDetail() {
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
 
-      {contact && (
+      {contact && !editingContact && (
         <div style={{ background: "#f7f7f5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>{contact.name}</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+            <h2 style={{ margin: 0 }}>{contact.name}</h2>
+            <button onClick={() => setEditingContact(true)} style={{ fontSize: 12 }}>{tr("common.edit")}</button>
+          </div>
           <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{tr("ledger.profileInfo")}</div>
           <div style={{ fontSize: 13, marginTop: 4 }}>{tr("ledger.mobileNumber")}: {contact.phone_number}</div>
           {contact.whatsapp_number && (
@@ -144,6 +234,19 @@ export default function CounterpartyLedgerDetail() {
           )}
           {contact.address && <div style={{ fontSize: 13 }}>{tr("ledger.address")}: {contact.address}</div>}
         </div>
+      )}
+
+      {editingContact && (
+        <form onSubmit={handleSaveContact} style={{ display: "grid", gap: 8, background: "#f7f7f5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <input placeholder={tr("ledger.name")} value={editName} onChange={(e) => setEditName(e.target.value)} />
+          <input placeholder={tr("ledger.mobileNumber")} value={editMobile} onChange={(e) => setEditMobile(e.target.value)} />
+          <input placeholder={tr("ledger.whatsappNumber")} value={editWhatsapp} onChange={(e) => setEditWhatsapp(e.target.value)} />
+          <input placeholder={tr("ledger.address")} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit">{tr("common.save")}</button>
+            <button type="button" onClick={() => setEditingContact(false)}>{tr("common.cancel")}</button>
+          </div>
+        </form>
       )}
 
       <div style={{ fontSize: 28, fontWeight: 500 }}>{formatNumber(Math.abs(balance))} AFN</div>
@@ -180,6 +283,8 @@ export default function CounterpartyLedgerDetail() {
           const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
           const showHeader = groupLabel !== lastGroupLabel;
           lastGroupLabel = groupLabel;
+          const isEditing = editingEntryId === entry.client_id;
+
           return (
             <div key={entry.client_id}>
               {showHeader && (
@@ -187,20 +292,41 @@ export default function CounterpartyLedgerDetail() {
                   {groupLabel}
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#999" }}>{formatDateTime(entry.entry_date, dateSystem, digitStyle)}</div>
-                  {entry.note && <div style={{ fontSize: 12 }}>{entry.note}</div>}
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
-                    {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+
+              {!isEditing && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#999" }}>
+                      {formatDateTime(entry.entry_date, dateSystem, digitStyle)} · {timeAgo(entry.entry_date, tr)}
+                    </div>
+                    {entry.note && <div style={{ fontSize: 12 }}>{entry.note}</div>}
                   </div>
-                  <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                    {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
+                      {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+                    </div>
+                    <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
+                      {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                    </div>
+                    <button onClick={() => startEditEntry(entry)} style={{ fontSize: 11, marginTop: 4 }}>{tr("common.edit")}</button>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {isEditing && (
+                <div style={{ display: "grid", gap: 6, padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                  <div>
+                    <label><input type="radio" checked={editEntryType === "credit"} onChange={() => setEditEntryType("credit")} /> {tr("ledger.givenRadio")}</label>
+                    <label style={{ marginLeft: 12 }}><input type="radio" checked={editEntryType === "debit"} onChange={() => setEditEntryType("debit")} /> {tr("ledger.receivedRadio")}</label>
+                  </div>
+                  <input type="number" value={editEntryAmount} onChange={(e) => setEditEntryAmount(e.target.value)} />
+                  <input value={editEntryNote} onChange={(e) => setEditEntryNote(e.target.value)} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => handleSaveEntry(entry)}>{tr("common.save")}</button>
+                    <button onClick={() => setEditingEntryId(null)}>{tr("common.cancel")}</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

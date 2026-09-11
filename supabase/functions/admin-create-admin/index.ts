@@ -1,11 +1,10 @@
 // ============================================================
-// admin-reset-password
+// admin-create-admin
 // ------------------------------------------------------------
-// Since login uses a synthetic email (no real inbox to send a
-// reset link to), "forgot password" is handled the same way
-// account creation is: the shop owner contacts the admin, who
-// generates a new password here and relays it manually (WhatsApp/
-// call) — same pattern as admin-approve-account's temp password.
+// Super-admin-only. Creates a new admin user (real email/password,
+// same pattern as AdminLoginScreen — admins are a small trusted
+// population, unlike shop owners' synthetic-email scheme) and their
+// admin_users row with the permissions the super admin assigns.
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -27,11 +26,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function generatePassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -51,49 +45,51 @@ serve(async (req) => {
       return jsonResponse({ error: "unauthorized" }, 401);
     }
 
-    const { data: admin } = await supabase
+    const { data: caller } = await supabase
       .from("admin_users")
       .select("*")
       .eq("id", userData.user.id)
       .single();
 
-    if (!admin || !admin.is_active || (admin.role !== "super_admin" && !admin.can_approve_accounts)) {
+    // Only a super_admin can create other admins — no bypass logic
+    // needed here since this IS the super_admin-only action.
+    if (!caller || !caller.is_active || caller.role !== "super_admin") {
       return jsonResponse({ error: "forbidden" }, 403);
     }
 
-    const { profile_id } = await req.json();
-    if (!profile_id) {
-      return jsonResponse({ error: "missing_profile_id" }, 400);
+    const { email, password, name, phone_number, role, can_approve_accounts, allowed_markets } = await req.json();
+    if (!email || !password || !name) {
+      return jsonResponse({ error: "missing_fields" }, 400);
     }
 
-    const { data: profile, error: profileErr } = await supabase
-      .from("profiles")
-      .select("phone_number, shop_name")
-      .eq("id", profile_id)
-      .single();
-
-    if (profileErr || !profile) {
-      return jsonResponse({ error: "profile_not_found" }, 404);
-    }
-
-    const newPassword = generatePassword();
-    const { error: updateErr } = await supabase.auth.admin.updateUserById(profile_id, {
-      password: newPassword,
+    const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
     });
 
-    if (updateErr) {
-      console.error("password reset failed:", updateErr);
-      return jsonResponse({ error: "reset_failed", detail: updateErr.message }, 500);
+    if (createErr || !newUser?.user) {
+      console.error("admin auth user creation failed:", createErr);
+      return jsonResponse({ error: "user_creation_failed", detail: createErr?.message }, 500);
     }
 
-    return jsonResponse({
-      status: "reset",
-      phone_number: profile.phone_number,
-      shop_name: profile.shop_name,
-      new_password: newPassword,
+    const { error: insertErr } = await supabase.from("admin_users").insert({
+      id: newUser.user.id,
+      name,
+      phone_number: phone_number ?? "",
+      role: role === "super_admin" ? "super_admin" : "staff",
+      can_approve_accounts: !!can_approve_accounts,
+      allowed_markets: Array.isArray(allowed_markets) ? allowed_markets : [],
     });
+
+    if (insertErr) {
+      console.error("admin_users insert failed:", insertErr);
+      return jsonResponse({ error: "admin_row_creation_failed" }, 500);
+    }
+
+    return jsonResponse({ status: "created", admin_id: newUser.user.id });
   } catch (err) {
-    console.error("admin-reset-password error:", err);
+    console.error("admin-create-admin error:", err);
     return jsonResponse({ error: "internal_error" }, 500);
   }
 });

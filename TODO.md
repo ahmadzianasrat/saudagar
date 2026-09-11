@@ -260,3 +260,49 @@ see section 1 and 2.**
 - [ ] **Run migration `012_counterparty_fields.sql`**
 - [ ] **`npm install`** needed before building — `jalaali-js` was added as a new dependency
 - [ ] No Edge Functions changed this round — only migrations + app/admin-panel code
+
+---
+
+## 20. This round — 7 items
+
+### 1. Edit capability (Ledger + Inventory)
+- [x] Contact profile editing (name, mobile, WhatsApp, address) from the contact detail page
+- [x] Ledger entry editing (type, amount, note) — inline edit on each entry row
+- [x] Inventory transaction editing (type, quantity, cost, transport, porter fee) — inline edit on each transaction row
+- [x] `013_inventory_transaction_edit.sql` — replaced the insert-only trigger with one that recomputes the item's quantity/avg cost from FULL transaction history on insert/update/delete, so edits stay correct (the old trigger only fired on insert — editing a transaction would have silently desynced the item's cached totals)
+- [x] Edits are direct Supabase calls, not offline-queued — a deliberate simplification; correcting an existing record is less time-critical than recording a new one, and this avoids needing update-merge logic in the offline queue
+
+### 2. "Adjustment" — explained + bug fixed
+- [x] Explained above: a manual quantity correction not tied to buying or selling (recount, spoilage, loss)
+- [x] **Fixed a real bug**: adjustments previously always forced a positive quantity — there was no way to record a decrease. Now accepts a signed value directly, with a hint shown under the field when Adjustment is selected.
+
+### 3. Sync-only-after-refresh — root cause fixed
+- [x] `offlineQueue.ts`: `enqueueWrite` now awaits the sync attempt instead of firing it in the background unobserved — this was the actual bug. Every screen that writes now re-checks sync status immediately after and shows the real result, not a hardcoded "pending" that only ever updated on a full reload.
+
+### 4. "Time ago" everywhere
+- [x] New `timeAgo()` in `dateFormat.ts`, shown alongside (not instead of) the full date/time in: ledger entries (both list and detail), inventory transactions, and prices
+
+### 5. Prices page — recent activity feed
+- [x] Now shows the 10 most recent price uploads across all commodities for the selected market (with date grouping + time-ago), instead of collapsing to one "today's price" row per commodity
+
+### 6. Super admin full authority + admin management
+- [x] `014_super_admin_authority.sql` — every RLS policy that checked `allowed_markets` or `can_approve_accounts` now also accepts `role = 'super_admin'` as an automatic bypass, so a super admin never needs manual permission assignment as new markets/commodities get added
+- [x] Added `is_active` flag — lets a super admin deactivate another admin reversibly, without deleting their row
+- [x] New `admin-create-admin` and `admin-update-admin` Edge Functions — super-admin-only, used to create new staff admins and adjust their permissions/active status
+- [x] New "Admins" tab in the admin panel (super_admin only) — create new admins, toggle their `can_approve_accounts`, check/uncheck their allowed markets, deactivate/reactivate
+- [x] Admin panel's tab visibility and `PriceUploadScreen`'s market list both now bypass for `role === 'super_admin'` at the UI level too, not just RLS
+
+### 7. Currency converter redesign
+- [x] INR removed entirely
+- [x] Rate editing redesigned to 3 explicit fields: "1 USD = ? AFN", "1000 AFN = ? PKR", "1000 PKR = ? AFN" — with a radio button choosing which AFN↔PKR direction is authoritative, avoiding two possibly-inconsistent rates being used silently
+- [x] The ⇄ button between the currency dropdowns now actually swaps them on click
+
+---
+
+## To run before testing this round
+- [ ] **Migrations**: `013_inventory_transaction_edit.sql`, `014_super_admin_authority.sql`
+- [ ] **Deploy 4 Edge Functions**: `admin-approve-account`, `admin-decline-account`, `admin-approve-manual-payment`, `admin-reject-manual-payment`, `admin-reset-password` (permission-check updates), plus deploy the 2 NEW ones: `admin-create-admin`, `admin-update-admin`
+- [ ] After migration 014 runs, your existing super_admin row should automatically gain full access everywhere — no manual allowed_markets update needed, that's the whole point of this change
+- [ ] Test: create a second (staff) admin via the new Admins tab, confirm their permissions actually gate what they can do
+- [ ] Test: edit a ledger entry and an inventory transaction, confirm the inventory item's quantity/avg cost updates correctly after an edit specifically (not just after a fresh insert)
+- [ ] Test: add an entry/transaction, confirm the sync indicator shows "Synced" without needing a refresh

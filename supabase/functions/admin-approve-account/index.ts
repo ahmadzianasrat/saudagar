@@ -86,7 +86,7 @@ serve(async (req) => {
       .eq("id", userData.user.id)
       .single();
 
-    if (adminErr || !admin || !admin.can_approve_accounts) {
+    if (adminErr || !admin || !admin.is_active || (admin.role !== "super_admin" && !admin.can_approve_accounts)) {
       return jsonResponse({ error: "forbidden" }, 403);
     }
 

@@ -65,3 +65,22 @@ export function dateGroupLabel(
   if (isYesterday(dateInput)) return tr("date.yesterday");
   return formatDate(dateInput, dateSystem, digitStyle);
 }
+
+// Relative "time ago" display — shown alongside, not instead of, the
+// full date/time, per the request that both be visible together.
+export function timeAgo(dateInput: string | Date, tr: (key: string, vars?: Record<string, string | number>) => string): string {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (seconds < 60) return tr("time.justNow");
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return tr("time.minutesAgo", { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return tr("time.hoursAgo", { count: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 30) return tr("time.daysAgo", { count: days });
+  const months = Math.floor(days / 30);
+  if (months < 12) return tr("time.monthsAgo", { count: months });
+  const years = Math.floor(months / 12);
+  return tr("time.yearsAgo", { count: years });
+}

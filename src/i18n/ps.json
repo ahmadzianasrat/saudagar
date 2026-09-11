@@ -102,5 +102,21 @@
   "currency.to": "ته",
   "currency.editRates": "د تبادلې نرخونه بدل کړئ",
   "currency.ratesNote": "نرخونه ستاسو لخوا ټاکل شوي او په دې وسیله کې خوندي دي — د بازار ژوندي نرخونه نه دي.",
-  "currency.rateFor": "۱ افغانۍ ="
+  "currency.rateFor": "۱ افغانۍ =",
+  "time.justNow": "همدا اوس",
+  "time.minutesAgo": "{count} دقیقې مخکې",
+  "time.hoursAgo": "{count} ساعته مخکې",
+  "time.daysAgo": "{count} ورځې مخکې",
+  "time.monthsAgo": "{count} میاشتې مخکې",
+  "time.yearsAgo": "{count} کاله مخکې",
+  "common.edit": "سمول",
+  "common.save": "خوندي کول",
+  "common.cancel": "لغوه کول",
+  "common.delete": "ړنګول",
+  "inventory.adjustmentHint": "د ذخیرې د زیاتوالي لپاره مثبت شمېره ولیکئ، د کمښت لپاره منفي (لکه د تلف کیدو لپاره).",
+  "prices.recentActivity": "وروستۍ بیه فعالیت",
+  "currency.usdRate": "۱ ډالر = ? افغانۍ",
+  "currency.afnToPkrRate": "۱۰۰۰ افغانۍ = ? کلدار",
+  "currency.pkrToAfnRate": "۱۰۰۰ کلدار = ? افغانۍ",
+  "currency.useThisRate": "د افغانۍ ↔ کلدار لپاره دا نرخ وکاروئ"
 }

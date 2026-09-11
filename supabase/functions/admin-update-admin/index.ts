@@ -1,11 +1,11 @@
 // ============================================================
-// admin-reset-password
+// admin-update-admin
 // ------------------------------------------------------------
-// Since login uses a synthetic email (no real inbox to send a
-// reset link to), "forgot password" is handled the same way
-// account creation is: the shop owner contacts the admin, who
-// generates a new password here and relays it manually (WhatsApp/
-// call) — same pattern as admin-approve-account's temp password.
+// Super-admin-only. Updates another admin's permissions
+// (can_approve_accounts, allowed_markets) or active status.
+// Client-side direct updates to admin_users are intentionally never
+// allowed (no update RLS policy exists on that table) — all changes
+// go through this function so they're deliberate and auditable.
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -27,11 +27,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function generatePassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -51,49 +46,40 @@ serve(async (req) => {
       return jsonResponse({ error: "unauthorized" }, 401);
     }
 
-    const { data: admin } = await supabase
+    const { data: caller } = await supabase
       .from("admin_users")
       .select("*")
       .eq("id", userData.user.id)
       .single();
 
-    if (!admin || !admin.is_active || (admin.role !== "super_admin" && !admin.can_approve_accounts)) {
+    if (!caller || !caller.is_active || caller.role !== "super_admin") {
       return jsonResponse({ error: "forbidden" }, 403);
     }
 
-    const { profile_id } = await req.json();
-    if (!profile_id) {
-      return jsonResponse({ error: "missing_profile_id" }, 400);
+    const { admin_id, can_approve_accounts, allowed_markets, is_active } = await req.json();
+    if (!admin_id) {
+      return jsonResponse({ error: "missing_admin_id" }, 400);
     }
 
-    const { data: profile, error: profileErr } = await supabase
-      .from("profiles")
-      .select("phone_number, shop_name")
-      .eq("id", profile_id)
-      .single();
+    const updates: Record<string, unknown> = {};
+    if (typeof can_approve_accounts === "boolean") updates.can_approve_accounts = can_approve_accounts;
+    if (Array.isArray(allowed_markets)) updates.allowed_markets = allowed_markets;
+    if (typeof is_active === "boolean") updates.is_active = is_active;
 
-    if (profileErr || !profile) {
-      return jsonResponse({ error: "profile_not_found" }, 404);
+    if (Object.keys(updates).length === 0) {
+      return jsonResponse({ error: "no_updates_provided" }, 400);
     }
 
-    const newPassword = generatePassword();
-    const { error: updateErr } = await supabase.auth.admin.updateUserById(profile_id, {
-      password: newPassword,
-    });
+    const { error: updateErr } = await supabase.from("admin_users").update(updates).eq("id", admin_id);
 
     if (updateErr) {
-      console.error("password reset failed:", updateErr);
-      return jsonResponse({ error: "reset_failed", detail: updateErr.message }, 500);
+      console.error("admin_users update failed:", updateErr);
+      return jsonResponse({ error: "update_failed" }, 500);
     }
 
-    return jsonResponse({
-      status: "reset",
-      phone_number: profile.phone_number,
-      shop_name: profile.shop_name,
-      new_password: newPassword,
-    });
+    return jsonResponse({ status: "updated" });
   } catch (err) {
-    console.error("admin-reset-password error:", err);
+    console.error("admin-update-admin error:", err);
     return jsonResponse({ error: "internal_error" }, 500);
   }
 });

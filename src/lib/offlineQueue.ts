@@ -57,7 +57,14 @@ function getDB() {
 
 // Call this whenever the user performs a ledger or inventory action.
 // It writes locally immediately (so the UI can update instantly and
-// offline), then kicks off a sync attempt in the background.
+// offline), then attempts to sync immediately — AWAITED, not
+// fire-and-forget. Previously this was `void flushQueue()`, which
+// meant the caller had no way to know when the sync attempt actually
+// finished, so the UI's "pending" indicator never updated to "synced"
+// until a full page reload re-checked every item from scratch. This
+// is the fix for "only synced after a refresh" — callers can now
+// await enqueueWrite and immediately re-check getSyncStatus for the
+// entry they just wrote.
 export async function enqueueWrite(
   table: QueueItem["table"],
   clientId: string,
@@ -72,9 +79,7 @@ export async function enqueueWrite(
     synced: false,
   });
 
-  // Fire-and-forget — UI already has the local write, this just tries
-  // to get it to the server without blocking the user.
-  void flushQueue();
+  await flushQueue();
 }
 
 // Attempts to push every unsynced item to Supabase. Safe to call
