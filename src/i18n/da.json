@@ -37,6 +37,8 @@
   "subscription.sixMonth": "۶ ماهه — ۱۲۵۰ افغانی (حدود ۱۷٪ صرفه‌جویی)",
   "subscription.expired": "اشتراک شما به پایان رسیده. می‌توانید اطلاعات خود را ببینید، اما برای ثبت جدید نیاز به تمدید است.",
   "subscription.renewalWarning": "در {days} روز به پایان می‌رسد. برای تمدید لمس کنید.",
+  "auth.appName": "سوداگر",
+  "auth.tagline": "حساب شما، کاروبار شما",
   "auth.login": "ورود",
   "auth.phoneNumber": "شماره تلفن",
   "auth.password": "رمز عبور",

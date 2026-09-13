@@ -2,11 +2,14 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useTranslation } from "../../i18n/useTranslation";
+import { colors, inputStyle, primaryButtonStyle, radius, shadow } from "../../theme";
+import { CheckCircleIcon } from "../../components/icons";
+import { BackButton } from "../../components/ui";
 
 // Shop owner submits basic info, an admin reviews and approves/declines
 // from the separate admin panel. No account exists in `profiles` until
 // approved — this only writes to `account_requests`.
-export default function RequestAccessScreen() {
+export default function RequestAccessScreen({ onBack }: { onBack: () => void }) {
   const { tr } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,34 +45,82 @@ export default function RequestAccessScreen() {
 
   if (submitted) {
     return (
-      <div style={{ padding: 16 }}>
-        <p>{tr("onboarding.pendingApproval")}</p>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          textAlign: "center",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: radius.pill,
+            background: colors.successSoft,
+            color: colors.success,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <CheckCircleIcon size={30} />
+        </div>
+        <p style={{ color: colors.textPrimary, fontSize: 15, maxWidth: 280 }}>{tr("onboarding.pendingApproval")}</p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ padding: 16, display: "grid", gap: 8 }}>
-      <h2>{tr("onboarding.requestAccess")}</h2>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <input
-        placeholder={tr("onboarding.ownerName")}
-        value={form.ownerName}
-        onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
-      />
-      <input
-        placeholder={tr("onboarding.shopName")}
-        value={form.shopName}
-        onChange={(e) => setForm({ ...form, shopName: e.target.value })}
-      />
-      <input
-        placeholder={tr("ledger.phoneNumber")}
-        value={form.phoneNumber}
-        onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-      />
-      <button type="submit" disabled={loading}>
-        {loading ? "..." : tr("onboarding.submit")}
-      </button>
-    </form>
+    <div style={{ minHeight: "100vh", padding: 20 }}>
+      <div style={{ marginBottom: 16 }}>
+        <BackButton onClick={onBack} />
+      </div>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          background: colors.surface,
+          borderRadius: radius.lg,
+          boxShadow: shadow.card,
+          padding: 20,
+          display: "grid",
+          gap: 12,
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 18, color: colors.textPrimary }}>{tr("onboarding.requestAccess")}</h2>
+        {error && (
+          <p style={{ color: colors.danger, fontSize: 13, margin: 0, background: colors.dangerSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+            {error}
+          </p>
+        )}
+        <input
+          placeholder={tr("onboarding.ownerName")}
+          value={form.ownerName}
+          onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
+          style={inputStyle}
+        />
+        <input
+          placeholder={tr("onboarding.shopName")}
+          value={form.shopName}
+          onChange={(e) => setForm({ ...form, shopName: e.target.value })}
+          style={inputStyle}
+        />
+        <input
+          placeholder={tr("ledger.phoneNumber")}
+          value={form.phoneNumber}
+          onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+          inputMode="tel"
+          style={inputStyle}
+        />
+        <button type="submit" disabled={loading} style={{ ...primaryButtonStyle, opacity: loading ? 0.7 : 1 }}>
+          {loading ? "…" : tr("onboarding.submit")}
+        </button>
+      </form>
+    </div>
   );
 }

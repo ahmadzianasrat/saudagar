@@ -1,7 +1,18 @@
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage, type Language, type DigitStyle, type DateSystem } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { supabase } from "../../lib/supabaseClient";
+import { colors, radius, shadow } from "../../theme";
+import { Card, SectionLabel, SegmentedControl } from "../../components/ui";
+import {
+  ChevronIcon,
+  CrownIcon,
+  GlobeIcon,
+  LockIcon,
+  LogOutIcon,
+  SwapIcon,
+} from "../../components/icons";
 
 const LANGUAGES: { code: Language; label: string }[] = [
   { code: "ps", label: "پښتو" },
@@ -25,104 +36,139 @@ export default function SettingsScreen() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>{tr("settings.title")}</h2>
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      <h1 style={{ fontSize: 19, fontWeight: 700, color: colors.textPrimary, margin: "0 0 16px" }}>{tr("settings.title")}</h1>
 
-      <section style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("settings.language")}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {LANGUAGES.map((l) => (
-            <button
-              key={l.code}
-              onClick={() => setLanguage(l.code)}
-              style={{
-                flex: 1,
-                padding: 10,
-                background: language === l.code ? "#1e6f5c" : "#f0f0f0",
-                color: language === l.code ? "#fff" : "#333",
-                border: "none",
-                borderRadius: 6,
-              }}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
+      <section>
+        <SectionLabel style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <GlobeIcon size={14} /> {tr("settings.language")}
+        </SectionLabel>
+        <SegmentedControl value={language} onChange={setLanguage} options={LANGUAGES.map((l) => ({ value: l.code, label: l.label }))} />
       </section>
 
-      <section style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("settings.numberFormat")}</div>
-
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>{tr("settings.digitStyle")}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["western", "eastern_arabic"] as DigitStyle[]).map((style) => (
-              <button
-                key={style}
-                onClick={() => setDigitStyle(style)}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  background: digitStyle === style ? "#1e6f5c" : "#f0f0f0",
-                  color: digitStyle === style ? "#fff" : "#333",
-                  border: "none",
-                  borderRadius: 6,
-                  fontSize: 13,
-                }}
-              >
-                {style === "western" ? tr("settings.western") : tr("settings.eastern")}
-              </button>
-            ))}
+      <section style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("settings.numberFormat")}</SectionLabel>
+        <Card style={{ display: "grid", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 12.5, color: colors.textSecondary, marginBottom: 6 }}>{tr("settings.digitStyle")}</div>
+            <SegmentedControl
+              value={digitStyle}
+              onChange={setDigitStyle}
+              options={([
+                { value: "western" as DigitStyle, label: tr("settings.western") },
+                { value: "eastern_arabic" as DigitStyle, label: tr("settings.eastern") },
+              ])}
+            />
           </div>
-        </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-          <input
-            type="checkbox"
-            checked={useThousandSeparator}
-            onChange={(e) => setUseThousandSeparator(e.target.checked)}
-          />
-          {tr("settings.thousandSeparator")}
-        </label>
+          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+            <span style={{ fontSize: 13.5, color: colors.textPrimary }}>{tr("settings.thousandSeparator")}</span>
+            <Toggle checked={useThousandSeparator} onChange={setUseThousandSeparator} />
+          </label>
+        </Card>
       </section>
 
-      <section style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("settings.dateSystem")}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {(["gregorian", "shamsi"] as DateSystem[]).map((system) => (
-            <button
-              key={system}
-              onClick={() => setDateSystem(system)}
-              style={{
-                flex: 1,
-                padding: 10,
-                background: dateSystem === system ? "#1e6f5c" : "#f0f0f0",
-                color: dateSystem === system ? "#fff" : "#333",
-                border: "none",
-                borderRadius: 6,
-                fontSize: 13,
-              }}
-            >
-              {system === "gregorian" ? tr("settings.gregorian") : tr("settings.shamsi")}
-            </button>
-          ))}
-        </div>
+      <section style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("settings.dateSystem")}</SectionLabel>
+        <SegmentedControl
+          value={dateSystem}
+          onChange={setDateSystem}
+          options={([
+            { value: "gregorian" as DateSystem, label: tr("settings.gregorian") },
+            { value: "shamsi" as DateSystem, label: tr("settings.shamsi") },
+          ])}
+        />
       </section>
 
-      <section style={{ marginTop: 24, display: "grid", gap: 8 }}>
-        <button onClick={() => navigate("/subscription")} style={{ padding: 12 }}>
-          {tr("settings.manageSubscription")}
-        </button>
-        <button onClick={() => navigate("/tools/currency-converter")} style={{ padding: 12 }}>
-          {tr("settings.currencyConverter")}
-        </button>
-        <button onClick={() => navigate("/settings/change-password")} style={{ padding: 12 }}>
-          {tr("settings.changePassword")}
-        </button>
-        <button onClick={handleLogout} style={{ padding: 12, color: "#b3261e" }}>
-          {tr("settings.logout")}
-        </button>
+      <section style={{ marginTop: 24 }}>
+        <Card style={{ padding: 4 }}>
+          <SettingsRow icon={<CrownIcon size={18} />} tone="amber" label={tr("settings.manageSubscription")} onClick={() => navigate("/subscription")} first />
+          <SettingsRow icon={<SwapIcon size={18} />} tone="purple" label={tr("settings.currencyConverter")} onClick={() => navigate("/tools/currency-converter")} />
+          <SettingsRow icon={<LockIcon size={18} />} tone="primary" label={tr("settings.changePassword")} onClick={() => navigate("/settings/change-password")} />
+          <SettingsRow icon={<LogOutIcon size={18} />} tone="danger" label={tr("settings.logout")} onClick={handleLogout} />
+        </Card>
       </section>
     </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 42,
+        height: 24,
+        borderRadius: radius.pill,
+        border: "none",
+        background: checked ? colors.primary : colors.border,
+        position: "relative",
+        cursor: "pointer",
+        flexShrink: 0,
+        padding: 0,
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 3,
+          insetInlineStart: checked ? 21 : 3,
+          width: 18,
+          height: 18,
+          borderRadius: radius.pill,
+          background: colors.white,
+          transition: "inset-inline-start 0.15s",
+          boxShadow: shadow.card,
+        }}
+      />
+    </button>
+  );
+}
+
+const TONES: Record<string, { bg: string; fg: string }> = {
+  primary: { bg: colors.primarySoft, fg: colors.primary },
+  amber: { bg: colors.amberSoft, fg: colors.amber },
+  purple: { bg: colors.purpleSoft, fg: colors.purple },
+  danger: { bg: colors.dangerSoft, fg: colors.danger },
+};
+
+function SettingsRow({
+  icon,
+  tone,
+  label,
+  onClick,
+  first,
+}: {
+  icon: ReactNode;
+  tone: keyof typeof TONES;
+  label: string;
+  onClick: () => void;
+  first?: boolean;
+}) {
+  const { bg, fg } = TONES[tone];
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 10px",
+        background: "none",
+        border: "none",
+        borderTop: first ? "none" : `1px solid ${colors.border}`,
+        cursor: "pointer",
+        textAlign: "start",
+      }}
+    >
+      <div style={{ width: 36, height: 36, borderRadius: radius.pill, background: bg, color: fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {icon}
+      </div>
+      <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: tone === "danger" ? colors.danger : colors.textPrimary }}>{label}</span>
+      <ChevronIcon size={16} dir="end" color={colors.textFaint} />
+    </button>
   );
 }

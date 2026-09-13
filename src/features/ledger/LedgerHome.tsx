@@ -7,6 +7,9 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
+import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle, shadow } from "../../theme";
+import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, SectionLabel, SyncDot } from "../../components/ui";
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, ChevronIcon, PersonIcon, PlusIcon, WalletIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
 
@@ -121,6 +124,8 @@ export default function LedgerHome() {
   }
 
   const totalBalance = contacts.reduce((sum, c) => sum + c.balance, 0);
+  const totalGiven = allEntries.filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
+  const totalReceived = allEntries.filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
 
   async function handleAddContact(e: FormEvent) {
     e.preventDefault();
@@ -209,102 +214,192 @@ export default function LedgerHome() {
   let lastGroupLabel: string | null = null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ fontSize: 13, color: "#888" }}>{tr("ledger.totalBalance")}</div>
-      <div style={{ fontSize: 28, fontWeight: 500 }}>{formatNumber(totalBalance)} AFN</div>
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      {/* Balance card */}
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`,
+          borderRadius: radius.xl,
+          padding: 20,
+          color: colors.white,
+          boxShadow: shadow.raised,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            insetInlineEnd: -18,
+            top: -18,
+            width: 100,
+            height: 100,
+            borderRadius: radius.pill,
+            background: "rgba(255,255,255,0.08)",
+          }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.85 }}>
+          <WalletIcon size={18} />
+          {tr("ledger.totalBalance")}
+        </div>
+        <div style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>
+          {formatNumber(totalBalance)} <span style={{ fontSize: 15, fontWeight: 600, opacity: 0.85 }}>AFN</span>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: "8px 12px" }}>
+            <div style={{ fontSize: 11, opacity: 0.85, display: "flex", alignItems: "center", gap: 4 }}>
+              <ArrowDownCircleIcon size={14} />
+              {tr("ledger.given")}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{formatNumber(totalGiven)}</div>
+          </div>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: "8px 12px" }}>
+            <div style={{ fontSize: 11, opacity: 0.85, display: "flex", alignItems: "center", gap: 4 }}>
+              <ArrowUpCircleIcon size={14} />
+              {tr("ledger.received")}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{formatNumber(totalReceived)}</div>
+          </div>
+        </div>
+      </div>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      {error && (
+        <p style={{ color: colors.danger, fontSize: 13, marginTop: 10, background: colors.dangerSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+          {error}
+        </p>
+      )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button onClick={() => setShowAddContact((v) => !v)} style={{ flex: 1, padding: 10 }}>
+      {/* Quick actions */}
+      <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+        <button onClick={() => { setShowAddContact((v) => !v); setShowQuickEntry(false); }} style={{ ...secondaryButtonStyle, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <PersonIcon size={17} />
           {tr("ledger.addContact")}
         </button>
-        <button onClick={() => setShowQuickEntry((v) => !v)} style={{ flex: 1, padding: 10 }}>
+        <button onClick={() => { setShowQuickEntry((v) => !v); setShowAddContact(false); }} style={{ ...primaryButtonStyle, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <PlusIcon size={17} />
           {tr("ledger.quickEntry")}
         </button>
       </div>
 
       {showAddContact && (
-        <form onSubmit={handleAddContact} style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <input placeholder={tr("ledger.name")} value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <input placeholder={tr("ledger.mobileNumber")} value={newMobile} onChange={(e) => setNewMobile(e.target.value)} />
-          <input placeholder={tr("ledger.whatsappNumber")} value={newWhatsapp} onChange={(e) => setNewWhatsapp(e.target.value)} />
-          <input placeholder={tr("ledger.address")} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
-          <button type="submit">{tr("ledger.save")}</button>
-        </form>
+        <Card style={{ marginTop: 12, display: "grid", gap: 10 }}>
+          <form onSubmit={handleAddContact} style={{ display: "grid", gap: 10 }}>
+            <input placeholder={tr("ledger.name")} value={newName} onChange={(e) => setNewName(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.mobileNumber")} value={newMobile} onChange={(e) => setNewMobile(e.target.value)} style={inputStyle} inputMode="tel" />
+            <input placeholder={tr("ledger.whatsappNumber")} value={newWhatsapp} onChange={(e) => setNewWhatsapp(e.target.value)} style={inputStyle} inputMode="tel" />
+            <input placeholder={tr("ledger.address")} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} style={inputStyle} />
+            <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
+          </form>
+        </Card>
       )}
 
       {showQuickEntry && (
-        <form onSubmit={handleQuickEntry} style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <select value={quickContactId} onChange={(e) => setQuickContactId(e.target.value)} required>
-            <option value="">{tr("ledger.selectContact")}</option>
-            {contacts.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <div>
-            <label><input type="radio" checked={quickType === "credit"} onChange={() => setQuickType("credit")} /> {tr("ledger.givenRadio")}</label>
-            <label style={{ marginLeft: 12 }}><input type="radio" checked={quickType === "debit"} onChange={() => setQuickType("debit")} /> {tr("ledger.receivedRadio")}</label>
-          </div>
-          <input placeholder={tr("ledger.amount")} type="number" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value)} />
-          <input placeholder={tr("ledger.note")} value={quickNote} onChange={(e) => setQuickNote(e.target.value)} />
-          <button type="submit">{tr("ledger.save")}</button>
-        </form>
+        <Card style={{ marginTop: 12, display: "grid", gap: 10 }}>
+          <form onSubmit={handleQuickEntry} style={{ display: "grid", gap: 10 }}>
+            <select value={quickContactId} onChange={(e) => setQuickContactId(e.target.value)} required style={inputStyle}>
+              <option value="">{tr("ledger.selectContact")}</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <DirectionToggle
+              value={quickType === "credit"}
+              onChange={(v) => setQuickType(v ? "credit" : "debit")}
+              positiveLabel={tr("ledger.givenRadio")}
+              negativeLabel={tr("ledger.receivedRadio")}
+              positiveIcon={<ArrowDownCircleIcon size={16} />}
+              negativeIcon={<ArrowUpCircleIcon size={16} />}
+            />
+            <input placeholder={tr("ledger.amount")} type="number" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.note")} value={quickNote} onChange={(e) => setQuickNote(e.target.value)} style={inputStyle} />
+            <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
+          </form>
+        </Card>
       )}
 
-      <div style={{ marginTop: 20 }}>
-        {contacts.length === 0 && <p style={{ color: "#888" }}>{tr("ledger.noContacts")}</p>}
-        {contacts.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => navigate(`/ledger/${c.id}`)}
-            style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #eee", cursor: "pointer" }}
-          >
-            <div>
-              <div>{c.name}</div>
-              {c.whatsapp_number && <div style={{ fontSize: 11, color: "#25D366" }}>{c.whatsapp_number}</div>}
-            </div>
-            <div style={{ color: c.balance >= 0 ? "#2e7d32" : "#b3261e", fontWeight: 500 }}>
-              {formatNumber(Math.abs(c.balance))}
-            </div>
-          </div>
-        ))}
+      {/* Contacts */}
+      <div style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("nav.ledger")}</SectionLabel>
+        {contacts.length === 0 && <EmptyState>{tr("ledger.noContacts")}</EmptyState>}
+        {contacts.length > 0 && (
+          <Card style={{ padding: 4 }}>
+            {contacts.map((c, i) => (
+              <div
+                key={c.id}
+                onClick={() => navigate(`/ledger/${c.id}`)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 10px",
+                  borderTop: i === 0 ? "none" : `1px solid ${colors.border}`,
+                  cursor: "pointer",
+                }}
+              >
+                <Avatar label={c.name} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14.5, color: colors.textPrimary }}>{c.name}</div>
+                  {c.whatsapp_number && <div style={{ fontSize: 11.5, color: colors.textFaint }}>{c.whatsapp_number}</div>}
+                </div>
+                <div style={{ color: c.balance >= 0 ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
+                  {c.balance < 0 && "-"}{formatNumber(Math.abs(c.balance))}
+                </div>
+                <ChevronIcon size={16} dir="end" color={colors.textFaint} />
+              </div>
+            ))}
+          </Card>
+        )}
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 15 }}>{tr("ledger.allEntries")}</h3>
-        {allEntries.length === 0 && <p style={{ color: "#888" }}>{tr("ledger.noEntries")}</p>}
-        {pagedEntries.map((entry) => {
-          const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
-          const showHeader = groupLabel !== lastGroupLabel;
-          lastGroupLabel = groupLabel;
-          return (
-            <div key={entry.client_id}>
-              {showHeader && (
-                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
-                  {groupLabel}
-                </div>
-              )}
-              <div
-                onClick={() => navigate(`/ledger/${entry.counterparty_id}`)}
-                style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee", cursor: "pointer" }}
-              >
-                <div>
-                  <div>{entry.counterparty_name}</div>
-                  <div style={{ fontSize: 11, color: "#999" }}>{timeAgo(entry.entry_date, tr)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
-                    {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
+      {/* All entries */}
+      <div style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("ledger.allEntries")}</SectionLabel>
+        {allEntries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
+        {allEntries.length > 0 && (
+          <Card style={{ padding: 4 }}>
+            {pagedEntries.map((entry, i) => {
+              const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
+              const showHeader = groupLabel !== lastGroupLabel;
+              lastGroupLabel = groupLabel;
+              const isCredit = entry.entry_type === "credit";
+              return (
+                <div key={entry.client_id}>
+                  {showHeader && <div style={{ padding: "6px 10px 0" }}><DateGroupHeader>{groupLabel}</DateGroupHeader></div>}
+                  <div
+                    onClick={() => navigate(`/ledger/${entry.counterparty_id}`)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 10px",
+                      borderTop: showHeader || i === 0 ? "none" : `1px solid ${colors.border}`,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isCredit ? (
+                      <ArrowDownCircleIcon size={30} color={colors.success} />
+                    ) : (
+                      <ArrowUpCircleIcon size={30} color={colors.danger} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: colors.textPrimary }}>{entry.counterparty_name}</div>
+                      <div style={{ fontSize: 11, color: colors.textFaint }}>{timeAgo(entry.entry_date, tr)}</div>
+                    </div>
+                    <div style={{ textAlign: "end" }}>
+                      <div style={{ color: isCredit ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
+                        {isCredit ? "+" : "-"}{formatNumber(entry.amount)}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                        <SyncDot synced={entry.syncStatus === "synced"} />
+                        {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                    {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
-                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </Card>
+        )}
         <Pagination page={entriesPage} totalItems={allEntries.length} pageSize={PAGE_SIZE} onPageChange={setEntriesPage} />
       </div>
     </div>

@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { phoneToSyntheticEmail } from "../../lib/authHelpers";
 import { useTranslation } from "../../i18n/useTranslation";
+import { colors, inputStyle, primaryButtonStyle, radius } from "../../theme";
+import { Card, PageHeader } from "../../components/ui";
+import { LockIcon } from "../../components/icons";
 
 // Re-verifies the CURRENT password before allowing a change, even
 // though a valid session alone would let Supabase's updateUser()
@@ -85,37 +88,72 @@ export default function ChangePasswordScreen() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>{tr("password.title")}</h2>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      {success && <p style={{ color: "#2e7d32" }}>{tr("password.success")}</p>}
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      <PageHeader title={tr("password.title")} onBack={() => navigate("/settings")} />
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <input
-          type="password"
-          placeholder={tr("password.current")}
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder={tr("password.new")}
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder={tr("password.confirm")}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? "..." : tr("password.save")}
-        </button>
-      </form>
+      <Card style={{ textAlign: "center", marginBottom: 16, paddingTop: 22, paddingBottom: 18 }}>
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: radius.pill,
+            background: colors.primarySoft,
+            color: colors.primary,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 10px",
+          }}
+        >
+          <LockIcon size={24} />
+        </div>
+        <div style={{ fontSize: 13, color: colors.textSecondary, maxWidth: 260, margin: "0 auto" }}>
+          {tr("password.title")}
+        </div>
+      </Card>
+
+      {error && (
+        <p style={{ color: colors.danger, fontSize: 13, background: colors.dangerSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+          {error}
+        </p>
+      )}
+      {success && (
+        <p style={{ color: colors.success, fontSize: 13, background: colors.successSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+          {tr("password.success")}
+        </p>
+      )}
+
+      <Card>
+        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
+          <input
+            type="password"
+            placeholder={tr("password.current")}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder={tr("password.new")}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder={tr("password.confirm")}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            style={inputStyle}
+          />
+          <button type="submit" disabled={loading} style={{ ...primaryButtonStyle, opacity: loading ? 0.7 : 1 }}>
+            {loading ? "…" : tr("password.save")}
+          </button>
+        </form>
+      </Card>
     </div>
   );
 }

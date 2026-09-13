@@ -37,6 +37,8 @@
   "subscription.sixMonth": "۶ میاشتې — ۱۲۵۰ افغانۍ (~۱۷٪ سپما)",
   "subscription.expired": "ستاسو اشتراک پای ته رسیدلی. تاسو کولی شئ خپلې معلومات وګورئ، خو د نوې ليکنې لپاره نوي کول اړین دي.",
   "subscription.renewalWarning": "په {days} ورځو کې پای ته رسیږي. د نوي کولو لپاره کلیک وکړئ.",
+  "auth.appName": "سوداگر",
+  "auth.tagline": "خیل حساب، خیل کارو بار",
   "auth.login": "ننوتل",
   "auth.phoneNumber": "د تلیفون شمېره",
   "auth.password": "پټ نوم",

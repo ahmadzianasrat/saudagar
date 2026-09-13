@@ -37,6 +37,8 @@
   "subscription.sixMonth": "6 Months — 1,250 AFN (save ~17%)",
   "subscription.expired": "Your subscription has expired. You can view your data, but adding new entries requires renewal.",
   "subscription.renewalWarning": "ends in {days} day(s). Tap to renew.",
+  "auth.appName": "Saudagar",
+  "auth.tagline": "Your ledger, your business",
   "auth.login": "Log In",
   "auth.phoneNumber": "Phone number",
   "auth.password": "Password",

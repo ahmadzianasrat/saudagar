@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #EEF3FB;
+  color: #101B33;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Noto Sans Arabic', Tahoma, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+button {
+  -webkit-appearance: none;
+}
+
+::placeholder {
+  color: #A6B0C3;
+}
+
+/* Hide native number input spinners for a cleaner amount field */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

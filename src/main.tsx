@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { initSyncListeners } from "./lib/offlineQueue";
+import "./index.css";
 
 // "Sync eagerly, not lazily" — start listening for reconnects and
 // periodic retry as soon as the app boots, not on first ledger action.

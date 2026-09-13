@@ -6,6 +6,9 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
+import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
+import { Card, DateGroupHeader, EmptyState, IconBadge, Pill, SectionLabel, SyncDot } from "../../components/ui";
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, BoxIcon, PencilIcon, PlusIcon, SwapIcon, TrendingIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
 
@@ -40,6 +43,17 @@ interface TransactionRow {
   created_at: string;
   syncStatus?: "pending" | "synced" | "not_found";
 }
+
+const TX_ICON: Record<TransactionRow["transaction_type"], typeof ArrowDownCircleIcon> = {
+  purchase: ArrowDownCircleIcon,
+  sale: ArrowUpCircleIcon,
+  adjustment: SwapIcon,
+};
+const TX_COLOR: Record<TransactionRow["transaction_type"], string> = {
+  purchase: colors.success,
+  sale: colors.danger,
+  adjustment: colors.purple,
+};
 
 export default function InventoryHome() {
   const { formatNumber, dateSystem, digitStyle } = useLanguage();
@@ -287,143 +301,197 @@ export default function InventoryHome() {
   let lastGroupLabel: string | null = null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>{tr("inventory.title")}</h2>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      <h1 style={{ fontSize: 19, fontWeight: 700, color: colors.textPrimary, margin: "0 0 14px" }}>{tr("inventory.title")}</h1>
 
-      {items.map((item) => (
-        <div key={item.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12, marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <strong>{item.commodity_name}</strong>
-            <span>{formatNumber(item.quantity)} {item.unit}</span>
-          </div>
-          <div style={{ fontSize: 12, color: "#888" }}>
-            {tr("inventory.avgCost")}: {formatNumber(item.avg_cost_per_unit)} / {item.unit} · {tr("inventory.total")}: {formatNumber(item.total_cost)}
-          </div>
-          {item.todayPrice !== null && (
-            <div style={{ fontSize: 12, color: "#1e6f5c", marginTop: 4 }}>
-              {tr("inventory.todayPrice")}: {formatNumber(item.todayPrice ?? 0)} — {tr("inventory.valueAtMarket")}: {formatNumber((item.todayPrice ?? 0) * item.quantity)}
-            </div>
-          )}
-          <button style={{ marginTop: 8 }} onClick={() => setShowAddTransaction(item.id)}>
-            {tr("inventory.addTransaction")}
-          </button>
-          {showAddTransaction === item.id && (
-            <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-              <select value={txType} onChange={(e) => setTxType(e.target.value as any)}>
-                <option value="purchase">{tr("inventory.purchase")}</option>
-                <option value="sale">{tr("inventory.sale")}</option>
-                <option value="adjustment">{tr("inventory.adjustment")}</option>
-              </select>
-              <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} />
-              {txType === "adjustment" && (
-                <p style={{ fontSize: 11, color: "#888", margin: 0 }}>{tr("inventory.adjustmentHint")}</p>
-              )}
-              {txType === "purchase" && (
-                <>
-                  <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} />
-                  <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} />
-                  <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} />
-                </>
-              )}
-              {txType === "sale" && (
-                <>
-                  <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required />
-                  <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} />
-                  <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} />
-                </>
-              )}
-              <button onClick={() => handleAddTransaction(item.id)}>{tr("inventory.save")}</button>
-            </div>
-          )}
-        </div>
-      ))}
+      {error && (
+        <p style={{ color: colors.danger, fontSize: 13, background: colors.dangerSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+          {error}
+        </p>
+      )}
 
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>{tr("inventory.addCommodity")}</div>
-        {commodities
-          .filter((c) => !items.some((i) => i.commodity_id === c.id))
-          .map((c) => (
-            <button key={c.id} style={{ marginRight: 6, marginBottom: 6 }} onClick={() => addNewCommodityToInventory(c.id)}>
-              + {c.name_en}
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.map((item) => (
+          <Card key={item.id}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <IconBadge icon={<BoxIcon size={20} />} bg={colors.primarySoft} fg={colors.primary} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: colors.textPrimary }}>{item.commodity_name}</div>
+                <div style={{ fontSize: 12, color: colors.textSecondary }}>
+                  {tr("inventory.avgCost")}: {formatNumber(item.avg_cost_per_unit)} / {item.unit}
+                </div>
+              </div>
+              <div style={{ textAlign: "end" }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: colors.textPrimary }}>{formatNumber(item.quantity)} {item.unit}</div>
+                <div style={{ fontSize: 11.5, color: colors.textFaint }}>{tr("inventory.total")}: {formatNumber(item.total_cost)}</div>
+              </div>
+            </div>
+
+            {item.todayPrice !== null && (
+              <div style={{ marginTop: 10, background: colors.successSoft, borderRadius: radius.sm, padding: "8px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+                <TrendingIcon size={16} color={colors.success} />
+                <div style={{ fontSize: 12, color: colors.success }}>
+                  {tr("inventory.todayPrice")}: <strong>{formatNumber(item.todayPrice ?? 0)}</strong> — {tr("inventory.valueAtMarket")}: <strong>{formatNumber((item.todayPrice ?? 0) * item.quantity)}</strong>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowAddTransaction(showAddTransaction === item.id ? null : item.id)}
+              style={{ ...secondaryButtonStyle, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
+              <PlusIcon size={16} />
+              {tr("inventory.addTransaction")}
             </button>
-          ))}
+
+            {showAddTransaction === item.id && (
+              <div style={{ marginTop: 10, display: "grid", gap: 8, paddingTop: 10, borderTop: `1px solid ${colors.border}` }}>
+                <select value={txType} onChange={(e) => setTxType(e.target.value as any)} style={inputStyle}>
+                  <option value="purchase">{tr("inventory.purchase")}</option>
+                  <option value="sale">{tr("inventory.sale")}</option>
+                  <option value="adjustment">{tr("inventory.adjustment")}</option>
+                </select>
+                <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} style={inputStyle} />
+                {txType === "adjustment" && (
+                  <p style={{ fontSize: 11, color: colors.textFaint, margin: 0 }}>{tr("inventory.adjustmentHint")}</p>
+                )}
+                {txType === "purchase" && (
+                  <>
+                    <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} style={inputStyle} />
+                    <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} style={inputStyle} />
+                    <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} style={inputStyle} />
+                  </>
+                )}
+                {txType === "sale" && (
+                  <>
+                    <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required style={inputStyle} />
+                    <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} style={inputStyle} />
+                    <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} style={inputStyle} />
+                  </>
+                )}
+                <button onClick={() => handleAddTransaction(item.id)} style={primaryButtonStyle}>{tr("inventory.save")}</button>
+              </div>
+            )}
+          </Card>
+        ))}
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 15 }}>{tr("inventory.allTransactions")}</h3>
-        {allTransactions.length === 0 && <p style={{ color: "#888" }}>{tr("inventory.noTransactions")}</p>}
-        {pagedTransactions.map((tx) => {
-          const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
-          const showHeader = groupLabel !== lastGroupLabel;
-          lastGroupLabel = groupLabel;
-          const isEditing = editingTxId === tx.client_id;
+      <div style={{ marginTop: 20 }}>
+        <SectionLabel>{tr("inventory.addCommodity")}</SectionLabel>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {commodities
+            .filter((c) => !items.some((i) => i.commodity_id === c.id))
+            .map((c) => (
+              <button
+                key={c.id}
+                onClick={() => addNewCommodityToInventory(c.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 12px",
+                  borderRadius: radius.pill,
+                  border: `1px solid ${colors.border}`,
+                  background: colors.surface,
+                  color: colors.primary,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <PlusIcon size={13} />
+                {c.name_en}
+              </button>
+            ))}
+        </div>
+      </div>
 
-          return (
-            <div key={tx.client_id}>
-              {showHeader && (
-                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
-                  {groupLabel}
-                </div>
-              )}
+      <div style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("inventory.allTransactions")}</SectionLabel>
+        {allTransactions.length === 0 && <EmptyState>{tr("inventory.noTransactions")}</EmptyState>}
+        {allTransactions.length > 0 && (
+          <Card style={{ padding: 4 }}>
+            {pagedTransactions.map((tx, i) => {
+              const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
+              const showHeader = groupLabel !== lastGroupLabel;
+              lastGroupLabel = groupLabel;
+              const isEditing = editingTxId === tx.client_id;
+              const Icon = TX_ICON[tx.transaction_type];
+              const tone = TX_COLOR[tx.transaction_type];
 
-              {!isEditing && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                  <div>
-                    <div>{tx.commodity_name} — {tr(`inventory.${tx.transaction_type}`)}</div>
-                    <div style={{ fontSize: 11, color: "#999" }}>
-                      {formatDateTime(tx.created_at, dateSystem, digitStyle)} · {timeAgo(tx.created_at, tr)}
-                    </div>
-                    {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
-                      <div style={{ fontSize: 11, color: "#999" }}>
-                        {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ color: tx.quantity >= 0 ? "#2e7d32" : "#b3261e" }}>
-                      {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
-                    </div>
-                    {tx.unit_cost !== null && (
-                      <>
-                        <div style={{ fontSize: 11, color: "#999" }}>@ {formatNumber(tx.unit_cost)}</div>
-                        <div style={{ fontSize: 11, color: "#999" }}>
-                          {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+              return (
+                <div key={tx.client_id}>
+                  {showHeader && <div style={{ padding: "6px 10px 0" }}><DateGroupHeader>{groupLabel}</DateGroupHeader></div>}
+
+                  {!isEditing && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px", borderTop: showHeader || i === 0 ? "none" : `1px solid ${colors.border}` }}>
+                      <Icon size={28} color={tone} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, color: colors.textPrimary, display: "flex", alignItems: "center", gap: 6 }}>
+                          {tx.commodity_name}
+                          <Pill bg={`${tone}1A`} fg={tone}>{tr(`inventory.${tx.transaction_type}`)}</Pill>
                         </div>
-                      </>
-                    )}
-                    <div style={{ fontSize: 10, color: tx.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                      {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                        <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>
+                          {formatDateTime(tx.created_at, dateSystem, digitStyle)} · {timeAgo(tx.created_at, tr)}
+                        </div>
+                        {(tx.transport_cost > 0 || tx.porter_fee > 0) && (
+                          <div style={{ fontSize: 10.5, color: colors.textFaint }}>
+                            {tr("inventory.transportCost")}: {formatNumber(tx.transport_cost)} · {tr("inventory.porterFee")}: {formatNumber(tx.porter_fee)}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "end" }}>
+                        <div style={{ color: tone, fontWeight: 700, fontSize: 14 }}>
+                          {tx.quantity >= 0 ? "+" : ""}{formatNumber(tx.quantity)} {tx.unit}
+                        </div>
+                        {tx.unit_cost !== null && (
+                          <>
+                            <div style={{ fontSize: 11, color: colors.textFaint }}>@ {formatNumber(tx.unit_cost)}</div>
+                            <div style={{ fontSize: 11, color: colors.textFaint }}>
+                              {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                            </div>
+                          </>
+                        )}
+                        <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                          <SyncDot synced={tx.syncStatus === "synced"} />
+                          {tx.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => startEditTx(tx)}
+                        style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <PencilIcon size={13} />
+                      </button>
                     </div>
-                    <button onClick={() => startEditTx(tx)} style={{ fontSize: 11, marginTop: 4 }}>{tr("common.edit")}</button>
-                  </div>
-                </div>
-              )}
-
-              {isEditing && (
-                <div style={{ display: "grid", gap: 6, padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                  <select value={editTxType} onChange={(e) => setEditTxType(e.target.value as any)}>
-                    <option value="purchase">{tr("inventory.purchase")}</option>
-                    <option value="sale">{tr("inventory.sale")}</option>
-                    <option value="adjustment">{tr("inventory.adjustment")}</option>
-                  </select>
-                  <input type="number" value={editTxQuantity} onChange={(e) => setEditTxQuantity(e.target.value)} placeholder={tr("inventory.quantity")} />
-                  {editTxType !== "adjustment" && (
-                    <>
-                      <input type="number" value={editTxUnitCost} onChange={(e) => setEditTxUnitCost(e.target.value)} placeholder={tr("inventory.unitCost")} />
-                      <input type="number" value={editTxTransportCost} onChange={(e) => setEditTxTransportCost(e.target.value)} placeholder={tr("inventory.transportCost")} />
-                      <input type="number" value={editTxPorterFee} onChange={(e) => setEditTxPorterFee(e.target.value)} placeholder={tr("inventory.porterFee")} />
-                    </>
                   )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => handleSaveTx(tx)}>{tr("common.save")}</button>
-                    <button onClick={() => setEditingTxId(null)}>{tr("common.cancel")}</button>
-                  </div>
+
+                  {isEditing && (
+                    <div style={{ display: "grid", gap: 8, padding: "10px", borderTop: `1px solid ${colors.border}` }}>
+                      <select value={editTxType} onChange={(e) => setEditTxType(e.target.value as any)} style={inputStyle}>
+                        <option value="purchase">{tr("inventory.purchase")}</option>
+                        <option value="sale">{tr("inventory.sale")}</option>
+                        <option value="adjustment">{tr("inventory.adjustment")}</option>
+                      </select>
+                      <input type="number" value={editTxQuantity} onChange={(e) => setEditTxQuantity(e.target.value)} placeholder={tr("inventory.quantity")} style={inputStyle} />
+                      {editTxType !== "adjustment" && (
+                        <>
+                          <input type="number" value={editTxUnitCost} onChange={(e) => setEditTxUnitCost(e.target.value)} placeholder={tr("inventory.unitCost")} style={inputStyle} />
+                          <input type="number" value={editTxTransportCost} onChange={(e) => setEditTxTransportCost(e.target.value)} placeholder={tr("inventory.transportCost")} style={inputStyle} />
+                          <input type="number" value={editTxPorterFee} onChange={(e) => setEditTxPorterFee(e.target.value)} placeholder={tr("inventory.porterFee")} style={inputStyle} />
+                        </>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => handleSaveTx(tx)} style={{ ...primaryButtonStyle, flex: 1 }}>{tr("common.save")}</button>
+                        <button onClick={() => setEditingTxId(null)} style={{ ...secondaryButtonStyle, flex: 1 }}>{tr("common.cancel")}</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </Card>
+        )}
         <Pagination page={txPage} totalItems={allTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
       </div>
     </div>

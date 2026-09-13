@@ -3,6 +3,9 @@ import { supabase } from "../../lib/supabaseClient";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
+import { colors, inputStyle } from "../../theme";
+import { Card, DateGroupHeader, EmptyState, IconBadge } from "../../components/ui";
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, TrendingIcon } from "../../components/icons";
 
 const RECENT_LIMIT = 10;
 
@@ -69,47 +72,51 @@ export default function PricesHome() {
   let lastGroupLabel: string | null = null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>{tr("prices.recentActivity")}</h2>
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      <h1 style={{ fontSize: 19, fontWeight: 700, color: colors.textPrimary, margin: "0 0 14px" }}>{tr("prices.recentActivity")}</h1>
 
       {markets.length > 1 && (
-        <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)} style={{ marginBottom: 12 }}>
+        <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }}>
           {markets.map((m) => (
             <option key={m.id} value={m.id}>{m.name_en} ({m.city})</option>
           ))}
         </select>
       )}
 
-      {prices.length === 0 && <p style={{ color: "#888" }}>{tr("prices.none")}</p>}
+      {prices.length === 0 && <EmptyState>{tr("prices.none")}</EmptyState>}
 
-      {prices.map((p) => {
-        const groupLabel = dateGroupLabel(p.created_at, dateSystem, digitStyle, tr);
-        const showHeader = groupLabel !== lastGroupLabel;
-        lastGroupLabel = groupLabel;
-        return (
-          <div key={p.id}>
-            {showHeader && (
-              <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
-                {groupLabel}
-              </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #eee" }}>
-              <div>
-                <div>{p.commodity_name}</div>
-                <div style={{ fontSize: 11, color: "#999" }}>{timeAgo(p.created_at, tr)}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div>{formatNumber(p.price)} AFN</div>
-                {p.change_from_previous !== null && (
-                  <div style={{ fontSize: 11, color: p.change_from_previous >= 0 ? "#2e7d32" : "#b3261e" }}>
-                    {p.change_from_previous >= 0 ? "+" : ""}{formatNumber(p.change_from_previous)}
+      {prices.length > 0 && (
+        <Card style={{ padding: 4 }}>
+          {prices.map((p, i) => {
+            const groupLabel = dateGroupLabel(p.created_at, dateSystem, digitStyle, tr);
+            const showHeader = groupLabel !== lastGroupLabel;
+            lastGroupLabel = groupLabel;
+            const change = p.change_from_previous;
+            const up = (change ?? 0) >= 0;
+            return (
+              <div key={p.id}>
+                {showHeader && <div style={{ padding: "6px 10px 0" }}><DateGroupHeader>{groupLabel}</DateGroupHeader></div>}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px", borderTop: showHeader || i === 0 ? "none" : `1px solid ${colors.border}` }}>
+                  <IconBadge icon={<TrendingIcon size={18} />} bg={colors.primarySoft} fg={colors.primary} size={38} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: colors.textPrimary }}>{p.commodity_name}</div>
+                    <div style={{ fontSize: 11, color: colors.textFaint }}>{timeAgo(p.created_at, tr)}</div>
                   </div>
-                )}
+                  <div style={{ textAlign: "end" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(p.price)} AFN</div>
+                    {change !== null && (
+                      <div style={{ fontSize: 11, color: up ? colors.success : colors.danger, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 }}>
+                        {up ? <ArrowUpCircleIcon size={11} color={colors.success} /> : <ArrowDownCircleIcon size={11} color={colors.danger} />}
+                        {up ? "+" : ""}{formatNumber(change)}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </Card>
+      )}
     </div>
   );
 }

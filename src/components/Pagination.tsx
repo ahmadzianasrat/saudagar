@@ -1,4 +1,6 @@
 import { useTranslation } from "../i18n/useTranslation";
+import { colors, radius } from "../theme";
+import { ChevronIcon } from "./icons";
 
 interface PaginationProps {
   page: number; // 1-indexed
@@ -18,15 +20,34 @@ export default function Pagination({ page, totalItems, pageSize, onPageChange }:
 
   if (totalPages <= 1) return null;
 
+  const navButton = (dir: "start" | "end", disabled: boolean, onClick: () => void) => (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: radius.pill,
+        border: `1px solid ${colors.border}`,
+        background: disabled ? colors.surfaceMuted : colors.surface,
+        color: disabled ? colors.textFaint : colors.primary,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      <ChevronIcon size={15} dir={dir} />
+    </button>
+  );
+
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 13 }}>
-      <button disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-        {tr("pagination.prev")}
-      </button>
-      <span>{tr("pagination.pageOf", { current: page, total: totalPages })}</span>
-      <button disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-        {tr("pagination.next")}
-      </button>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 16 }}>
+      {navButton("start", page <= 1, () => onPageChange(page - 1))}
+      <span style={{ fontSize: 12.5, color: colors.textSecondary, fontWeight: 600 }}>
+        {tr("pagination.pageOf", { current: page, total: totalPages })}
+      </span>
+      {navButton("end", page >= totalPages, () => onPageChange(page + 1))}
     </div>
   );
 }

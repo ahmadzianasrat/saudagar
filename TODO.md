@@ -306,3 +306,11 @@ see section 1 and 2.**
 - [ ] Test: create a second (staff) admin via the new Admins tab, confirm their permissions actually gate what they can do
 - [ ] Test: edit a ledger entry and an inventory transaction, confirm the inventory item's quantity/avg cost updates correctly after an edit specifically (not just after a fresh insert)
 - [ ] Test: add an entry/transaction, confirm the sync indicator shows "Synced" without needing a refresh
+
+---
+
+## 21. Super admin login issue — resolved
+
+- [x] Diagnosed as a transient PostgREST schema-cache lag following migration 014's schema change (`is_active` column) — NOT an RLS or data problem. The `admin_users` row, its `is_active` flag, and both policies were all confirmed correct via direct SQL.
+- [x] `015_fix_admin_users_recursion.sql` replaced the self-referential "super admin reads all admins" policy with a `SECURITY DEFINER` function (`is_active_super_admin()`), removing a latent risk even though it likely wasn't the actual cause of this specific issue
+- [x] Login resolved on its own shortly after — worth remembering for next time: **after any migration that changes table structure, a brief delay or a manual `NOTIFY pgrst, 'reload schema';` may be needed before the app reflects it**, even though the database itself is already correct

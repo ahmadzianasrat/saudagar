@@ -1,31 +1,52 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "../i18n/useTranslation";
+import { colors, shadow } from "../theme";
+import { HomeIcon, BoxIcon, TrendingIcon, SettingsIcon } from "./icons";
 
 const TABS = [
-  { path: "/ledger", labelKey: "nav.ledger" },
-  { path: "/inventory", labelKey: "nav.inventory" },
-  { path: "/prices", labelKey: "nav.prices" },
-  { path: "/settings", labelKey: "nav.settings" },
+  { path: "/ledger", labelKey: "nav.ledger", Icon: HomeIcon },
+  { path: "/inventory", labelKey: "nav.inventory", Icon: BoxIcon },
+  { path: "/prices", labelKey: "nav.prices", Icon: TrendingIcon },
+  { path: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
 
 export default function BottomNav() {
   const { tr } = useTranslation();
 
   return (
-    <nav style={{ display: "flex", borderTop: "1px solid #ddd", padding: "8px 0" }}>
+    <nav
+      style={{
+        display: "flex",
+        background: colors.surface,
+        boxShadow: shadow.nav,
+        padding: "8px 4px",
+        paddingBottom: "max(8px, env(safe-area-inset-bottom))",
+        flexShrink: 0,
+      }}
+    >
       {TABS.map((tab) => (
         <NavLink
           key={tab.path}
           to={tab.path}
           style={({ isActive }) => ({
             flex: 1,
-            textAlign: "center",
-            fontSize: 12,
-            color: isActive ? "#1e6f5c" : "#888",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 3,
+            padding: "4px 0",
+            fontSize: 11,
+            fontWeight: 600,
+            color: isActive ? colors.primary : colors.textFaint,
             textDecoration: "none",
           })}
         >
-          {tr(tab.labelKey)}
+          {({ isActive }) => (
+            <>
+              <tab.Icon size={22} color={isActive ? colors.primary : colors.textFaint} />
+              {tr(tab.labelKey)}
+            </>
+          )}
         </NavLink>
       ))}
     </nav>

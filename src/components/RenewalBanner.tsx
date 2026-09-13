@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import type { SubscriptionStatus } from "../lib/useSubscriptionStatus";
 import { shouldShowRenewalBanner } from "../lib/useSubscriptionStatus";
 import { useTranslation } from "../i18n/useTranslation";
+import { colors } from "../theme";
+import { AlertIcon } from "./icons";
 
 // Two distinct states, per earlier decisions:
 //   - 0–5 days left: renewal warning, ledger/inventory still fully usable
@@ -20,7 +22,8 @@ export default function RenewalBanner({ status }: { status: SubscriptionStatus }
 
   if (isExpired) {
     return (
-      <div style={bannerStyle("#fdecea", "#b3261e")} onClick={() => navigate("/subscription")}>
+      <div style={bannerStyle(colors.dangerSoft, colors.danger)} onClick={() => navigate("/subscription")}>
+        <AlertIcon size={16} color={colors.danger} />
         {tr("subscription.expired")}
       </div>
     );
@@ -28,7 +31,8 @@ export default function RenewalBanner({ status }: { status: SubscriptionStatus }
 
   if (showRenewalWarning) {
     return (
-      <div style={bannerStyle("#fff4e5", "#8a5300")} onClick={() => navigate("/subscription")}>
+      <div style={bannerStyle(colors.amberSoft, colors.amber)} onClick={() => navigate("/subscription")}>
+        <AlertIcon size={16} color={colors.amber} />
         {tr("subscription.renewalWarning", { days: status.daysUntilExpiry ?? 0 })}
       </div>
     );
@@ -42,8 +46,14 @@ function bannerStyle(bg: string, fg: string): CSSProperties {
     background: bg,
     color: fg,
     padding: "10px 16px",
-    fontSize: 13,
+    fontSize: 12.5,
+    fontWeight: 600,
     cursor: "pointer",
     textAlign: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    flexShrink: 0,
   };
 }

@@ -7,6 +7,9 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
+import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
+import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, PageHeader, SyncDot } from "../../components/ui";
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, PencilIcon, PlusIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
 
@@ -214,122 +217,161 @@ export default function CounterpartyLedgerDetail() {
   let lastGroupLabel: string | null = null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <button onClick={() => navigate("/ledger")} style={{ marginBottom: 12 }}>
-        ← {tr("nav.ledger")}
-      </button>
+    <div style={{ padding: 16, paddingBottom: 28 }}>
+      <PageHeader title={contact?.name ?? "…"} onBack={() => navigate("/ledger")} />
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      {error && (
+        <p style={{ color: colors.danger, fontSize: 13, background: colors.dangerSoft, padding: "8px 10px", borderRadius: radius.sm }}>
+          {error}
+        </p>
+      )}
 
       {contact && !editingContact && (
-        <div style={{ background: "#f7f7f5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-            <h2 style={{ margin: 0 }}>{contact.name}</h2>
-            <button onClick={() => setEditingContact(true)} style={{ fontSize: 12 }}>{tr("common.edit")}</button>
+        <Card style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center" }}>
+          <Avatar label={contact.name} size={48} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: colors.textSecondary }}>{tr("ledger.mobileNumber")}: {contact.phone_number}</div>
+            {contact.whatsapp_number && (
+              <div style={{ fontSize: 12.5, color: "#25D366", marginTop: 2 }}>WhatsApp: {contact.whatsapp_number}</div>
+            )}
+            {contact.address && <div style={{ fontSize: 12.5, color: colors.textFaint, marginTop: 2 }}>{contact.address}</div>}
           </div>
-          <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{tr("ledger.profileInfo")}</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>{tr("ledger.mobileNumber")}: {contact.phone_number}</div>
-          {contact.whatsapp_number && (
-            <div style={{ fontSize: 13, color: "#25D366" }}>{tr("ledger.whatsappNumber")}: {contact.whatsapp_number}</div>
-          )}
-          {contact.address && <div style={{ fontSize: 13 }}>{tr("ledger.address")}: {contact.address}</div>}
-        </div>
+          <button
+            onClick={() => setEditingContact(true)}
+            style={{ width: 32, height: 32, borderRadius: radius.pill, border: "none", background: colors.primarySoft, color: colors.primary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+          >
+            <PencilIcon size={14} />
+          </button>
+        </Card>
       )}
 
       {editingContact && (
-        <form onSubmit={handleSaveContact} style={{ display: "grid", gap: 8, background: "#f7f7f5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-          <input placeholder={tr("ledger.name")} value={editName} onChange={(e) => setEditName(e.target.value)} />
-          <input placeholder={tr("ledger.mobileNumber")} value={editMobile} onChange={(e) => setEditMobile(e.target.value)} />
-          <input placeholder={tr("ledger.whatsappNumber")} value={editWhatsapp} onChange={(e) => setEditWhatsapp(e.target.value)} />
-          <input placeholder={tr("ledger.address")} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit">{tr("common.save")}</button>
-            <button type="button" onClick={() => setEditingContact(false)}>{tr("common.cancel")}</button>
-          </div>
-        </form>
+        <Card style={{ marginBottom: 12 }}>
+          <form onSubmit={handleSaveContact} style={{ display: "grid", gap: 10 }}>
+            <input placeholder={tr("ledger.name")} value={editName} onChange={(e) => setEditName(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.mobileNumber")} value={editMobile} onChange={(e) => setEditMobile(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.whatsappNumber")} value={editWhatsapp} onChange={(e) => setEditWhatsapp(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.address")} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} style={inputStyle} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="submit" style={{ ...primaryButtonStyle, flex: 1 }}>{tr("common.save")}</button>
+              <button type="button" onClick={() => setEditingContact(false)} style={{ ...secondaryButtonStyle, flex: 1 }}>{tr("common.cancel")}</button>
+            </div>
+          </form>
+        </Card>
       )}
 
-      <div style={{ fontSize: 28, fontWeight: 500 }}>{formatNumber(Math.abs(balance))} AFN</div>
-
-      <div style={{ display: "flex", gap: 10, margin: "12px 0" }}>
-        <div style={{ flex: 1, background: "#e8f5e9", padding: 10, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: "#2e7d32" }}>{tr("ledger.given")}</div>
-          <div style={{ fontWeight: 500 }}>{formatNumber(given)}</div>
-        </div>
-        <div style={{ flex: 1, background: "#fdecea", padding: 10, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: "#b3261e" }}>{tr("ledger.received")}</div>
-          <div style={{ fontWeight: 500 }}>{formatNumber(received)}</div>
+      <div style={{ textAlign: "center", margin: "18px 0 4px" }}>
+        <div style={{ fontSize: 12, color: colors.textSecondary }}>{tr("ledger.totalBalance")}</div>
+        <div style={{ fontSize: 30, fontWeight: 800, color: balance >= 0 ? colors.success : colors.danger }}>
+          {formatNumber(Math.abs(balance))} <span style={{ fontSize: 14, color: colors.textSecondary, fontWeight: 600 }}>AFN</span>
         </div>
       </div>
 
-      <button onClick={() => setShowNewEntry((v) => !v)} style={{ width: "100%", padding: 10 }}>
+      <div style={{ display: "flex", gap: 10, margin: "14px 0" }}>
+        <div style={{ flex: 1, background: colors.successSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
+          <ArrowDownCircleIcon size={20} color={colors.success} />
+          <div>
+            <div style={{ fontSize: 11, color: colors.success, fontWeight: 600 }}>{tr("ledger.given")}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(given)}</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, background: colors.dangerSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
+          <ArrowUpCircleIcon size={20} color={colors.danger} />
+          <div>
+            <div style={{ fontSize: 11, color: colors.danger, fontWeight: 600 }}>{tr("ledger.received")}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(received)}</div>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={() => setShowNewEntry((v) => !v)} style={{ ...primaryButtonStyle, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <PlusIcon size={17} />
         {tr("ledger.newEntry")}
       </button>
 
       {showNewEntry && (
-        <form onSubmit={handleAddEntry} style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <div>
-            <label><input type="radio" checked={entryType === "credit"} onChange={() => setEntryType("credit")} /> {tr("ledger.givenRadio")}</label>
-            <label style={{ marginLeft: 12 }}><input type="radio" checked={entryType === "debit"} onChange={() => setEntryType("debit")} /> {tr("ledger.receivedRadio")}</label>
-          </div>
-          <input placeholder={tr("ledger.amount")} type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} />
-          <button type="submit">{tr("ledger.save")}</button>
-        </form>
+        <Card style={{ marginTop: 12 }}>
+          <form onSubmit={handleAddEntry} style={{ display: "grid", gap: 10 }}>
+            <DirectionToggle
+              value={entryType === "credit"}
+              onChange={(v) => setEntryType(v ? "credit" : "debit")}
+              positiveLabel={tr("ledger.givenRadio")}
+              negativeLabel={tr("ledger.receivedRadio")}
+              positiveIcon={<ArrowDownCircleIcon size={16} />}
+              negativeIcon={<ArrowUpCircleIcon size={16} />}
+            />
+            <input placeholder={tr("ledger.amount")} type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={inputStyle} />
+            <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
+            <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
+          </form>
+        </Card>
       )}
 
-      <div style={{ marginTop: 16 }}>
-        {pagedEntries.map((entry) => {
-          const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
-          const showHeader = groupLabel !== lastGroupLabel;
-          lastGroupLabel = groupLabel;
-          const isEditing = editingEntryId === entry.client_id;
+      <div style={{ marginTop: 20 }}>
+        {entries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
+        {entries.length > 0 && (
+          <Card style={{ padding: 4 }}>
+            {pagedEntries.map((entry, i) => {
+              const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
+              const showHeader = groupLabel !== lastGroupLabel;
+              lastGroupLabel = groupLabel;
+              const isEditing = editingEntryId === entry.client_id;
+              const isCredit = entry.entry_type === "credit";
 
-          return (
-            <div key={entry.client_id}>
-              {showHeader && (
-                <div style={{ fontSize: 12, color: "#1e6f5c", fontWeight: 500, marginTop: 10, marginBottom: 2 }}>
-                  {groupLabel}
-                </div>
-              )}
+              return (
+                <div key={entry.client_id}>
+                  {showHeader && <div style={{ padding: "6px 10px 0" }}><DateGroupHeader>{groupLabel}</DateGroupHeader></div>}
 
-              {!isEditing && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: "#999" }}>
-                      {formatDateTime(entry.entry_date, dateSystem, digitStyle)} · {timeAgo(entry.entry_date, tr)}
+                  {!isEditing && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px", borderTop: showHeader || i === 0 ? "none" : `1px solid ${colors.border}` }}>
+                      {isCredit ? <ArrowDownCircleIcon size={28} color={colors.success} /> : <ArrowUpCircleIcon size={28} color={colors.danger} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: colors.textFaint }}>
+                          {formatDateTime(entry.entry_date, dateSystem, digitStyle)} · {timeAgo(entry.entry_date, tr)}
+                        </div>
+                        {entry.note && <div style={{ fontSize: 13, color: colors.textPrimary, marginTop: 1 }}>{entry.note}</div>}
+                      </div>
+                      <div style={{ textAlign: "end" }}>
+                        <div style={{ color: isCredit ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
+                          {isCredit ? "+" : "-"}{formatNumber(entry.amount)}
+                        </div>
+                        <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                          <SyncDot synced={entry.syncStatus === "synced"} />
+                          {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => startEditEntry(entry)}
+                        style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <PencilIcon size={13} />
+                      </button>
                     </div>
-                    {entry.note && <div style={{ fontSize: 12 }}>{entry.note}</div>}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ color: entry.entry_type === "credit" ? "#2e7d32" : "#b3261e" }}>
-                      {entry.entry_type === "credit" ? "+" : "-"}{formatNumber(entry.amount)}
-                    </div>
-                    <div style={{ fontSize: 10, color: entry.syncStatus === "synced" ? "#2e7d32" : "#999" }}>
-                      {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
-                    </div>
-                    <button onClick={() => startEditEntry(entry)} style={{ fontSize: 11, marginTop: 4 }}>{tr("common.edit")}</button>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {isEditing && (
-                <div style={{ display: "grid", gap: 6, padding: "8px 0", borderBottom: "1px solid #eee" }}>
-                  <div>
-                    <label><input type="radio" checked={editEntryType === "credit"} onChange={() => setEditEntryType("credit")} /> {tr("ledger.givenRadio")}</label>
-                    <label style={{ marginLeft: 12 }}><input type="radio" checked={editEntryType === "debit"} onChange={() => setEditEntryType("debit")} /> {tr("ledger.receivedRadio")}</label>
-                  </div>
-                  <input type="number" value={editEntryAmount} onChange={(e) => setEditEntryAmount(e.target.value)} />
-                  <input value={editEntryNote} onChange={(e) => setEditEntryNote(e.target.value)} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => handleSaveEntry(entry)}>{tr("common.save")}</button>
-                    <button onClick={() => setEditingEntryId(null)}>{tr("common.cancel")}</button>
-                  </div>
+                  {isEditing && (
+                    <div style={{ display: "grid", gap: 8, padding: "10px", borderTop: `1px solid ${colors.border}` }}>
+                      <DirectionToggle
+                        value={editEntryType === "credit"}
+                        onChange={(v) => setEditEntryType(v ? "credit" : "debit")}
+                        positiveLabel={tr("ledger.givenRadio")}
+                        negativeLabel={tr("ledger.receivedRadio")}
+                        positiveIcon={<ArrowDownCircleIcon size={16} />}
+                        negativeIcon={<ArrowUpCircleIcon size={16} />}
+                      />
+                      <input type="number" value={editEntryAmount} onChange={(e) => setEditEntryAmount(e.target.value)} style={inputStyle} />
+                      <input value={editEntryNote} onChange={(e) => setEditEntryNote(e.target.value)} style={inputStyle} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => handleSaveEntry(entry)} style={{ ...primaryButtonStyle, flex: 1 }}>{tr("common.save")}</button>
+                        <button onClick={() => setEditingEntryId(null)} style={{ ...secondaryButtonStyle, flex: 1 }}>{tr("common.cancel")}</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </Card>
+        )}
         <Pagination page={page} totalItems={entries.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </div>

@@ -15,6 +15,8 @@ import CurrencyConverterScreen from "./features/tools/CurrencyConverterScreen";
 import { useAuth } from "./lib/useAuth";
 import { useSubscriptionStatus } from "./lib/useSubscriptionStatus";
 import { useTranslation } from "./i18n/useTranslation";
+import { colors } from "./theme";
+import { WalletIcon } from "./components/icons";
 
 export default function App() {
   const { session, isAuthenticated, loading } = useAuth();
@@ -23,25 +25,38 @@ export default function App() {
   const { tr } = useTranslation();
 
   if (loading) {
-    return <div style={{ padding: 16 }}>{tr("auth.loading")}</div>;
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          background: colors.bg,
+          color: colors.textSecondary,
+        }}
+      >
+        <WalletIcon size={36} color={colors.primary} />
+        <span style={{ fontSize: 13 }}>{tr("auth.loading")}</span>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
     if (showRequestAccess) {
-      return <RequestAccessScreen />;
+      return <RequestAccessScreen onBack={() => setShowRequestAccess(false)} />;
     }
     return (
-      <div>
-        <LoginScreen onLoggedIn={() => {}} />
-        <button style={{ margin: "0 16px" }} onClick={() => setShowRequestAccess(true)}>
-          {tr("auth.newHere")}
-        </button>
+      <div style={{ minHeight: "100vh", background: colors.bg }}>
+        <LoginScreen onLoggedIn={() => {}} onRequestAccess={() => setShowRequestAccess(true)} />
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: colors.bg }}>
       <RenewalBanner status={subscriptionStatus} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <Routes>
