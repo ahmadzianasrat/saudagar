@@ -1,5 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { supabase } from "./supabaseClient";
+import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "./theme";
+import { Avatar, Card, ErrorBanner, LoadingRows, PageHeading, Pill } from "./ui";
+import { PhoneIcon, PlusIcon, ShieldIcon } from "./icons";
 
 interface AdminUser {
   id: string;
@@ -17,7 +20,7 @@ interface Market {
 }
 
 export default function AdminManagementScreen() {
-  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[] | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -40,6 +43,7 @@ export default function AdminManagementScreen() {
     if (adminErr) {
       console.error("failed to load admins:", adminErr);
       setError("Couldn't load admins.");
+      setAdmins([]);
       return;
     }
     setAdmins(adminRows ?? []);
@@ -141,83 +145,176 @@ export default function AdminManagementScreen() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>Admins</h2>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+    <div>
+      <PageHeading
+        title="Admins"
+        right={
+          <button
+            onClick={() => setShowCreate((v) => !v)}
+            style={{ ...primaryButtonStyle, display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <PlusIcon size={15} /> Create Admin
+          </button>
+        }
+      />
 
-      <button onClick={() => setShowCreate((v) => !v)} style={{ marginBottom: 12 }}>
-        + Create Admin
-      </button>
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {showCreate && (
-        <form onSubmit={handleCreate} style={{ display: "grid", gap: 8, marginBottom: 16, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-          <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} required />
-          <input placeholder="Phone number" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
-          <input placeholder="Email (for login)" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
-          <input placeholder="Password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-          <label>
-            <input type="checkbox" checked={newCanApprove} onChange={(e) => setNewCanApprove(e.target.checked)} /> Can approve accounts / manual payments
-          </label>
-          <div style={{ fontSize: 12, color: "#888" }}>Allowed markets (for price uploads):</div>
-          {markets.map((m) => (
-            <label key={m.id} style={{ fontSize: 13 }}>
-              <input
-                type="checkbox"
-                checked={newMarkets.includes(m.id)}
-                onChange={(e) =>
-                  setNewMarkets((prev) => (e.target.checked ? [...prev, m.id] : prev.filter((id) => id !== m.id)))
-                }
-              />{" "}
-              {m.name_en}
+        <Card style={{ maxWidth: 460, marginBottom: 18 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: colors.textPrimary, marginBottom: 12 }}>Create Admin</div>
+          <form onSubmit={handleCreate} style={{ display: "grid", gap: 12 }}>
+            <Field label="Full Name">
+              <input placeholder="Enter full name" value={newName} onChange={(e) => setNewName(e.target.value)} required style={inputStyle} />
+            </Field>
+            <Field label="Email">
+              <input placeholder="Enter email address" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required style={inputStyle} />
+            </Field>
+            <Field label="Phone (Optional)">
+              <input placeholder="Enter phone number" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="Password">
+              <input placeholder="Enter password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required style={inputStyle} />
+            </Field>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: colors.textPrimary }}>
+              <input type="checkbox" checked={newCanApprove} onChange={(e) => setNewCanApprove(e.target.checked)} />
+              Can approve accounts / manual payments
             </label>
-          ))}
-          <button type="submit" disabled={creating}>{creating ? "Creating..." : "Create"}</button>
-        </form>
+
+            <div>
+              <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6, fontWeight: 600 }}>Allowed markets (for price uploads)</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {markets.map((m) => {
+                  const checked = newMarkets.includes(m.id);
+                  return (
+                    <button
+                      type="button"
+                      key={m.id}
+                      onClick={() => setNewMarkets((prev) => (checked ? prev.filter((id) => id !== m.id) : [...prev, m.id]))}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: radius.pill,
+                        border: `1px solid ${checked ? colors.primary : colors.border}`,
+                        background: checked ? colors.primarySoft : colors.surface,
+                        color: checked ? colors.primary : colors.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {m.name_en}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="submit" disabled={creating} style={{ ...primaryButtonStyle, flex: 1 }}>{creating ? "Creating..." : "Create Admin"}</button>
+              <button type="button" onClick={() => setShowCreate(false)} style={{ ...secondaryButtonStyle, flex: 1 }}>Cancel</button>
+            </div>
+          </form>
+        </Card>
       )}
 
-      {admins.map((admin) => (
-        <div key={admin.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12, marginBottom: 10, opacity: admin.is_active ? 1 : 0.5 }}>
-          <div>
-            <strong>{admin.name}</strong> ({admin.role})
-            {!admin.is_active && <span style={{ color: "crimson", fontSize: 12 }}> — deactivated</span>}
-          </div>
-          <div style={{ fontSize: 12, color: "#999" }}>{admin.phone_number}</div>
+      {admins === null && <LoadingRows count={3} />}
 
-          {admin.role !== "super_admin" && (
-            <>
-              <label style={{ display: "block", marginTop: 8, fontSize: 13 }}>
-                <input
-                  type="checkbox"
-                  checked={admin.can_approve_accounts}
-                  disabled={busyId === admin.id}
-                  onChange={() => toggleCanApprove(admin)}
-                />{" "}
-                Can approve accounts / manual payments
-              </label>
-              <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>Allowed markets:</div>
-              {markets.map((m) => (
-                <label key={m.id} style={{ fontSize: 13, display: "block" }}>
-                  <input
-                    type="checkbox"
-                    checked={admin.allowed_markets?.includes(m.id) ?? false}
-                    disabled={busyId === admin.id}
-                    onChange={() => toggleMarket(admin, m.id)}
-                  />{" "}
-                  {m.name_en}
-                </label>
-              ))}
-              <button disabled={busyId === admin.id} onClick={() => toggleActive(admin)} style={{ marginTop: 8 }}>
-                {admin.is_active ? "Deactivate" : "Reactivate"}
-              </button>
-            </>
-          )}
-          {admin.role === "super_admin" && (
-            <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
-              Super admins automatically have full access to every market and approval permission — nothing to configure.
-            </div>
-          )}
+      {admins !== null && (
+        <div style={{ display: "grid", gap: 12 }}>
+          {admins.map((admin) => (
+            <Card key={admin.id} style={{ opacity: admin.is_active ? 1 : 0.6 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                <Avatar label={admin.name} size={40} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, color: colors.textPrimary }}>{admin.name}</div>
+                    <Pill bg={admin.role === "super_admin" ? colors.primarySoft : colors.surfaceMuted} fg={admin.role === "super_admin" ? colors.primary : colors.textSecondary}>
+                      <ShieldIcon size={10} /> {admin.role}
+                    </Pill>
+                    {!admin.is_active && <Pill bg={colors.dangerSoft} fg={colors.danger}>Deactivated</Pill>}
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textFaint, display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                    <PhoneIcon size={11} /> {admin.phone_number}
+                  </div>
+
+                  {admin.role !== "super_admin" && (
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: colors.textPrimary }}>
+                        <input
+                          type="checkbox"
+                          checked={admin.can_approve_accounts}
+                          disabled={busyId === admin.id}
+                          onChange={() => toggleCanApprove(admin)}
+                        />
+                        Can approve accounts / manual payments
+                      </label>
+
+                      <div style={{ fontSize: 12, color: colors.textSecondary, margin: "10px 0 6px", fontWeight: 600 }}>Allowed markets</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {markets.map((m) => {
+                          const checked = admin.allowed_markets?.includes(m.id) ?? false;
+                          return (
+                            <button
+                              key={m.id}
+                              disabled={busyId === admin.id}
+                              onClick={() => toggleMarket(admin, m.id)}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: radius.pill,
+                                border: `1px solid ${checked ? colors.primary : colors.border}`,
+                                background: checked ? colors.primarySoft : colors.surface,
+                                color: checked ? colors.primary : colors.textSecondary,
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {m.name_en}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        disabled={busyId === admin.id}
+                        onClick={() => toggleActive(admin)}
+                        style={{
+                          marginTop: 12,
+                          padding: "8px 16px",
+                          borderRadius: radius.md,
+                          border: "none",
+                          background: admin.is_active ? colors.dangerSoft : colors.successSoft,
+                          color: admin.is_active ? colors.danger : colors.success,
+                          fontWeight: 600,
+                          fontSize: 12.5,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {admin.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </div>
+                  )}
+                  {admin.role === "super_admin" && (
+                    <div style={{ fontSize: 12, color: colors.textFaint, marginTop: 8 }}>
+                      Super admins automatically have full access to every market and approval permission — nothing to configure.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
-      ))}
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>{label}</label>
+      {children}
     </div>
   );
 }

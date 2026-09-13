@@ -296,6 +296,29 @@ export function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
+// Shown instead of EmptyState while a fetch is in flight, so the
+// "no data yet" message never has a chance to flash on screen before
+// real data has arrived — the caller should track loaded data as
+// `T[] | null` (null = not loaded yet) rather than defaulting to `[]`.
+export function LoadingRows({ count = 3 }: { count?: number }) {
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            height: 56,
+            borderRadius: radius.md,
+            background: `linear-gradient(90deg, ${colors.surfaceMuted} 25%, #ECF1FA 37%, ${colors.surfaceMuted} 63%)`,
+            backgroundSize: "400% 100%",
+            animation: "app-shimmer 1.4s ease infinite",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function DateGroupHeader({ children }: { children: ReactNode }) {
   return (
     <div

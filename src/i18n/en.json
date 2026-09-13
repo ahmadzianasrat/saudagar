@@ -83,6 +83,7 @@
   "inventory.allTransactions": "All Transactions",
   "inventory.transportCost": "Transport cost (optional)",
   "inventory.porterFee": "Porter/worker fee (optional)",
+  "inventory.noItems": "No items in inventory yet.",
   "inventory.noTransactions": "No transactions yet.",
   "inventory.salePrice": "Sale price (per unit)",
   "inventory.totalAmount": "Total",

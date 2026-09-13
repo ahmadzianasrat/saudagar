@@ -1,0 +1,49 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #EEF3FB;
+  color: #101B33;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Noto Sans Arabic', Tahoma, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+::placeholder {
+  color: #A6B0C3;
+}
+
+@keyframes admin-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Responsive shell: desktop uses a fixed sidebar, narrow viewports
+   (phones/small tablets) collapse it in favor of a bottom tab bar —
+   matching the two admin-panel layouts in the reference design. */
+.admin-sidebar {
+  display: flex;
+}
+.admin-bottomnav {
+  display: none;
+}
+@media (max-width: 860px) {
+  .admin-sidebar {
+    display: none;
+  }
+  .admin-bottomnav {
+    display: flex;
+  }
+  .admin-main {
+    padding-bottom: 76px !important;
+  }
+}

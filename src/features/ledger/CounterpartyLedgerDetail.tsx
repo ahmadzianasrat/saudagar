@@ -8,7 +8,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
-import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, PageHeader, SyncDot } from "../../components/ui";
+import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, PageHeader, SyncDot } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, PencilIcon, PlusIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
@@ -38,7 +38,9 @@ export default function CounterpartyLedgerDetail() {
 
   const [profileId, setProfileId] = useState<string | null>(null);
   const [contact, setContact] = useState<ContactProfile | null>(null);
-  const [entries, setEntries] = useState<LedgerEntry[]>([]);
+  // `null` = not loaded yet, distinct from `[]` = loaded and empty —
+  // avoids flashing the empty-state message before real data arrives.
+  const [entries, setEntries] = useState<LedgerEntry[] | null>(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [entryType, setEntryType] = useState<"credit" | "debit">("credit");
   const [amount, setAmount] = useState("");
@@ -107,9 +109,9 @@ export default function CounterpartyLedgerDetail() {
     setEntries(withStatus);
   }
 
-  const balance = entries.reduce((sum, e) => sum + (e.entry_type === "credit" ? e.amount : -e.amount), 0);
-  const given = entries.filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
-  const received = entries.filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
+  const balance = (entries ?? []).reduce((sum, e) => sum + (e.entry_type === "credit" ? e.amount : -e.amount), 0);
+  const given = (entries ?? []).filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
+  const received = (entries ?? []).filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
 
   async function handleAddEntry(e: FormEvent) {
     e.preventDefault();
@@ -142,7 +144,7 @@ export default function CounterpartyLedgerDetail() {
         entry_date: new Date().toISOString(),
         syncStatus,
       },
-      ...prev,
+      ...(prev ?? []),
     ]);
 
     setAmount("");
@@ -204,7 +206,7 @@ export default function CounterpartyLedgerDetail() {
     }
 
     setEntries((prev) =>
-      prev.map((e) =>
+      (prev ?? []).map((e) =>
         e.client_id === entry.client_id
           ? { ...e, entry_type: editEntryType, amount: Number(editEntryAmount), note: editEntryNote }
           : e
@@ -213,7 +215,7 @@ export default function CounterpartyLedgerDetail() {
     setEditingEntryId(null);
   }
 
-  const pagedEntries = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedEntries = (entries ?? []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   let lastGroupLabel: string | null = null;
 
   return (
@@ -308,8 +310,9 @@ export default function CounterpartyLedgerDetail() {
       )}
 
       <div style={{ marginTop: 20 }}>
-        {entries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
-        {entries.length > 0 && (
+        {entries === null && <LoadingRows count={4} />}
+        {entries !== null && entries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
+        {entries !== null && entries.length > 0 && (
           <Card style={{ padding: 4 }}>
             {pagedEntries.map((entry, i) => {
               const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
@@ -372,7 +375,7 @@ export default function CounterpartyLedgerDetail() {
             })}
           </Card>
         )}
-        <Pagination page={page} totalItems={entries.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} totalItems={(entries ?? []).length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </div>
   );

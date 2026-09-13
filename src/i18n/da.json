@@ -83,6 +83,7 @@
   "inventory.allTransactions": "همه معاملات",
   "inventory.transportCost": "هزینه حمل‌ونقل (اختیاری)",
   "inventory.porterFee": "مزد باربر/کارگر (اختیاری)",
+  "inventory.noItems": "هنوز جنسی در موجودی نیست.",
   "inventory.noTransactions": "هنوز معامله‌ای وجود ندارد.",
   "inventory.salePrice": "قیمت فروش (به ازای هر واحد)",
   "inventory.totalAmount": "مجموع",

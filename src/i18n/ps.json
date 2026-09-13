@@ -83,6 +83,7 @@
   "inventory.allTransactions": "ټولې معاملې",
   "inventory.transportCost": "د لېږد لګښت (اختیاري)",
   "inventory.porterFee": "د بارکش/کارګر مزد (اختیاري)",
+  "inventory.noItems": "تر اوسه هېڅ توکی په موجودۍ کې نشته.",
   "inventory.noTransactions": "لا تر اوسه هېڅ معامله نشته.",
   "inventory.salePrice": "د پلور بیه (هره واحده)",
   "inventory.totalAmount": "ټول",

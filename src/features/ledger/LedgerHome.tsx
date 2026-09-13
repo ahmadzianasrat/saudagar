@@ -8,7 +8,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle, shadow } from "../../theme";
-import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, SectionLabel, SyncDot } from "../../components/ui";
+import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, SectionLabel, SyncDot } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, ChevronIcon, PersonIcon, PlusIcon, WalletIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
@@ -43,8 +43,12 @@ export default function LedgerHome() {
   const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [contacts, setContacts] = useState<CounterpartyWithBalance[]>([]);
-  const [allEntries, setAllEntries] = useState<EntryRow[]>([]);
+  // `null` = "haven't loaded yet", distinct from `[]` = "loaded, and
+  // there's genuinely nothing there" — without this distinction the
+  // empty-state message flashes on screen for a moment on every visit
+  // to this tab, before the real data has had a chance to arrive.
+  const [contacts, setContacts] = useState<CounterpartyWithBalance[] | null>(null);
+  const [allEntries, setAllEntries] = useState<EntryRow[] | null>(null);
   const [entriesPage, setEntriesPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +83,8 @@ export default function LedgerHome() {
     if (cpErr) {
       console.error("failed to load counterparties:", cpErr);
       setError("Couldn't load contacts.");
+      setContacts([]);
+      setAllEntries([]);
       return;
     }
 
@@ -91,6 +97,7 @@ export default function LedgerHome() {
     if (entriesErr) {
       console.error("failed to load ledger_entries:", entriesErr);
       setError("Couldn't load balances.");
+      setAllEntries([]);
       return;
     }
 
@@ -123,9 +130,9 @@ export default function LedgerHome() {
     setAllEntries(withStatus);
   }
 
-  const totalBalance = contacts.reduce((sum, c) => sum + c.balance, 0);
-  const totalGiven = allEntries.filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
-  const totalReceived = allEntries.filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
+  const totalBalance = (contacts ?? []).reduce((sum, c) => sum + c.balance, 0);
+  const totalGiven = (allEntries ?? []).filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
+  const totalReceived = (allEntries ?? []).filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
 
   async function handleAddContact(e: FormEvent) {
     e.preventDefault();
@@ -177,15 +184,17 @@ export default function LedgerHome() {
     // "only synced after refresh" symptom.
     const syncStatus = await getSyncStatus(clientId);
 
-    const contactName = contacts.find((c) => c.id === quickContactId)?.name;
+    const contactName = (contacts ?? []).find((c) => c.id === quickContactId)?.name;
     setContacts((prev) =>
-      prev.map((c) =>
+      (prev ?? []).map((c) =>
         c.id === quickContactId
           ? { ...c, balance: c.balance + (quickType === "credit" ? Number(quickAmount) : -Number(quickAmount)), lastActivity: new Date().toISOString() }
           : c
       )
     );
     setAllEntries((prev) => [
+      // prepend: prev is guaranteed non-null here since this only runs
+      // after the initial load has completed (the form isn't shown until then)
       {
         id: clientId,
         client_id: clientId,
@@ -197,7 +206,7 @@ export default function LedgerHome() {
         entry_date: new Date().toISOString(),
         syncStatus,
       },
-      ...prev,
+      ...(prev ?? []),
     ]);
 
     setQuickAmount("");
@@ -207,7 +216,7 @@ export default function LedgerHome() {
     setShowQuickEntry(false);
   }
 
-  const pagedEntries = allEntries.slice((entriesPage - 1) * PAGE_SIZE, entriesPage * PAGE_SIZE);
+  const pagedEntries = (allEntries ?? []).slice((entriesPage - 1) * PAGE_SIZE, entriesPage * PAGE_SIZE);
 
   // Insert a group header row whenever the day changes within this
   // page — separates "Today" / "Yesterday" / older entries visually.
@@ -298,7 +307,7 @@ export default function LedgerHome() {
           <form onSubmit={handleQuickEntry} style={{ display: "grid", gap: 10 }}>
             <select value={quickContactId} onChange={(e) => setQuickContactId(e.target.value)} required style={inputStyle}>
               <option value="">{tr("ledger.selectContact")}</option>
-              {contacts.map((c) => (
+              {(contacts ?? []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -320,8 +329,9 @@ export default function LedgerHome() {
       {/* Contacts */}
       <div style={{ marginTop: 22 }}>
         <SectionLabel>{tr("nav.ledger")}</SectionLabel>
-        {contacts.length === 0 && <EmptyState>{tr("ledger.noContacts")}</EmptyState>}
-        {contacts.length > 0 && (
+        {contacts === null && <LoadingRows count={4} />}
+        {contacts !== null && contacts.length === 0 && <EmptyState>{tr("ledger.noContacts")}</EmptyState>}
+        {contacts !== null && contacts.length > 0 && (
           <Card style={{ padding: 4 }}>
             {contacts.map((c, i) => (
               <div
@@ -354,8 +364,9 @@ export default function LedgerHome() {
       {/* All entries */}
       <div style={{ marginTop: 22 }}>
         <SectionLabel>{tr("ledger.allEntries")}</SectionLabel>
-        {allEntries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
-        {allEntries.length > 0 && (
+        {allEntries === null && <LoadingRows count={4} />}
+        {allEntries !== null && allEntries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
+        {allEntries !== null && allEntries.length > 0 && (
           <Card style={{ padding: 4 }}>
             {pagedEntries.map((entry, i) => {
               const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
@@ -400,7 +411,7 @@ export default function LedgerHome() {
             })}
           </Card>
         )}
-        <Pagination page={entriesPage} totalItems={allEntries.length} pageSize={PAGE_SIZE} onPageChange={setEntriesPage} />
+        <Pagination page={entriesPage} totalItems={(allEntries ?? []).length} pageSize={PAGE_SIZE} onPageChange={setEntriesPage} />
       </div>
     </div>
   );

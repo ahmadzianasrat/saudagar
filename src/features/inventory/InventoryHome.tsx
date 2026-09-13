@@ -7,7 +7,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
-import { Card, DateGroupHeader, EmptyState, IconBadge, Pill, SectionLabel, SyncDot } from "../../components/ui";
+import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows, Pill, SectionLabel, SyncDot } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, BoxIcon, PencilIcon, PlusIcon, SwapIcon, TrendingIcon } from "../../components/icons";
 
 const PAGE_SIZE = 10;
@@ -59,9 +59,11 @@ export default function InventoryHome() {
   const { formatNumber, dateSystem, digitStyle } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  // `null` = not loaded yet, distinct from `[]` = loaded and empty —
+  // avoids flashing the empty-state message before real data arrives.
+  const [items, setItems] = useState<InventoryItem[] | null>(null);
   const [commodities, setCommodities] = useState<Commodity[]>([]);
-  const [allTransactions, setAllTransactions] = useState<TransactionRow[]>([]);
+  const [allTransactions, setAllTransactions] = useState<TransactionRow[] | null>(null);
   const [txPage, setTxPage] = useState(1);
 
   const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
@@ -110,6 +112,7 @@ export default function InventoryHome() {
     if (invErr) {
       console.error("failed to load inventory_items:", invErr);
       setError(`Couldn't load inventory: ${invErr.message}`);
+      setItems([]);
       return;
     }
 
@@ -155,6 +158,7 @@ export default function InventoryHome() {
     if (txErr) {
       console.error("failed to load inventory_transactions:", txErr);
       setError(`Couldn't load transaction history: ${txErr.message}`);
+      setAllTransactions([]);
       return;
     }
 
@@ -205,8 +209,10 @@ export default function InventoryHome() {
     // status immediately instead of hardcoding "pending".
     const syncStatus = await getSyncStatus(clientId);
 
-    const item = items.find((i) => i.id === itemId);
+    const item = (items ?? []).find((i) => i.id === itemId);
     setAllTransactions((prev) => [
+      // prepend: prev is non-null here since this only runs after the
+      // initial load (the transaction form isn't shown until then)
       {
         id: clientId,
         client_id: clientId,
@@ -221,7 +227,7 @@ export default function InventoryHome() {
         created_at: new Date().toISOString(),
         syncStatus,
       },
-      ...prev,
+      ...(prev ?? []),
     ]);
 
     loadItems();
@@ -274,7 +280,7 @@ export default function InventoryHome() {
     }
 
     setAllTransactions((prev) =>
-      prev.map((t) => (t.client_id === tx.client_id ? { ...t, ...updates } : t))
+      (prev ?? []).map((t) => (t.client_id === tx.client_id ? { ...t, ...updates } : t))
     );
     setEditingTxId(null);
     loadItems(); // reflect the trigger's recalculated quantity/avg cost
@@ -297,7 +303,7 @@ export default function InventoryHome() {
     loadItems();
   }
 
-  const pagedTransactions = allTransactions.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
+  const pagedTransactions = (allTransactions ?? []).slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
   let lastGroupLabel: string | null = null;
 
   return (
@@ -310,6 +316,9 @@ export default function InventoryHome() {
         </p>
       )}
 
+      {items === null && <LoadingRows count={3} />}
+      {items !== null && items.length === 0 && <EmptyState>{tr("inventory.noItems")}</EmptyState>}
+      {items !== null && items.length > 0 && (
       <div style={{ display: "grid", gap: 10 }}>
         {items.map((item) => (
           <Card key={item.id}>
@@ -375,12 +384,13 @@ export default function InventoryHome() {
           </Card>
         ))}
       </div>
+      )}
 
       <div style={{ marginTop: 20 }}>
         <SectionLabel>{tr("inventory.addCommodity")}</SectionLabel>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {commodities
-            .filter((c) => !items.some((i) => i.commodity_id === c.id))
+            .filter((c) => !(items ?? []).some((i) => i.commodity_id === c.id))
             .map((c) => (
               <button
                 key={c.id}
@@ -408,8 +418,9 @@ export default function InventoryHome() {
 
       <div style={{ marginTop: 22 }}>
         <SectionLabel>{tr("inventory.allTransactions")}</SectionLabel>
-        {allTransactions.length === 0 && <EmptyState>{tr("inventory.noTransactions")}</EmptyState>}
-        {allTransactions.length > 0 && (
+        {allTransactions === null && <LoadingRows count={4} />}
+        {allTransactions !== null && allTransactions.length === 0 && <EmptyState>{tr("inventory.noTransactions")}</EmptyState>}
+        {allTransactions !== null && allTransactions.length > 0 && (
           <Card style={{ padding: 4 }}>
             {pagedTransactions.map((tx, i) => {
               const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
@@ -492,7 +503,7 @@ export default function InventoryHome() {
             })}
           </Card>
         )}
-        <Pagination page={txPage} totalItems={allTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
+        <Pagination page={txPage} totalItems={(allTransactions ?? []).length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
       </div>
     </div>
   );

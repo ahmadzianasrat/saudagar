@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { colors, radius } from "./theme";
+import { Avatar, Card, EmptyState, ErrorBanner, LoadingRows, PageHeading, Pill, SuccessBanner } from "./ui";
+import { CheckIcon, ClockIcon, PhoneIcon, XIcon } from "./icons";
 
 interface ManualPaymentRequest {
   id: string;
@@ -15,10 +18,11 @@ interface ManualPaymentRequest {
 }
 
 export default function ManualPaymentsScreen() {
-  const [requests, setRequests] = useState<ManualPaymentRequest[]>([]);
+  const [requests, setRequests] = useState<ManualPaymentRequest[] | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [lastApproved, setLastApproved] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -34,6 +38,7 @@ export default function ManualPaymentsScreen() {
     if (error) {
       console.error("failed to load manual payment requests:", error);
       setActionError("Couldn't load requests.");
+      setRequests([]);
       return;
     }
 
@@ -89,7 +94,8 @@ export default function ManualPaymentsScreen() {
         setActionError(`Approval failed: ${result.error}`);
         return;
       }
-      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      setLastApproved(request.shop_name ?? "Shop");
+      setRequests((prev) => (prev ?? []).filter((r) => r.id !== request.id));
     } catch (err) {
       console.error("approve manual payment failed:", err);
       setActionError(err instanceof Error ? err.message : "Something went wrong.");
@@ -103,7 +109,7 @@ export default function ManualPaymentsScreen() {
     setActionError(null);
     try {
       await callFunction("admin-reject-manual-payment", { request_id: request.id });
-      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      setRequests((prev) => (prev ?? []).filter((r) => r.id !== request.id));
     } catch (err) {
       console.error("reject manual payment failed:", err);
       setActionError(err instanceof Error ? err.message : "Something went wrong.");
@@ -113,33 +119,63 @@ export default function ManualPaymentsScreen() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>Manual Payment Claims ({requests.length})</h2>
-      {actionError && (
-        <p style={{ color: "crimson", background: "#fdecea", padding: 8, borderRadius: 6 }}>{actionError}</p>
-      )}
+    <div>
+      <PageHeading title={`Manual Payment Claims${requests !== null ? ` (${requests.length})` : ""}`} />
 
-      {requests.map((r) => (
-        <div key={r.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12, marginBottom: 10 }}>
-          <div><strong>{r.shop_name}</strong> — {r.owner_name} ({r.phone_number})</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>
-            {r.tier === "monthly" ? "Monthly" : "6 Months"} — {r.amount} AFN
-          </div>
-          {r.note && <div style={{ fontSize: 13, color: "#555", marginTop: 4 }}>"{r.note}"</div>}
-          {imageUrls[r.id] && (
-            <a href={imageUrls[r.id]} target="_blank" rel="noreferrer">
-              <img src={imageUrls[r.id]} alt="Payment proof" style={{ maxWidth: 200, marginTop: 8, borderRadius: 6 }} />
-            </a>
-          )}
-          <div style={{ fontSize: 11, color: "#999", marginTop: 6 }}>{new Date(r.created_at).toLocaleString()}</div>
-          <div style={{ marginTop: 8 }}>
-            <button disabled={busyId === r.id} onClick={() => approve(r)}>Approve</button>
-            <button disabled={busyId === r.id} onClick={() => reject(r)} style={{ marginLeft: 8 }}>Reject</button>
-          </div>
+      {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
+      {lastApproved && <SuccessBanner>Payment approved for {lastApproved} — their subscription is now active.</SuccessBanner>}
+
+      {requests === null && <LoadingRows count={3} />}
+      {requests !== null && requests.length === 0 && <EmptyState>No pending manual payment claims.</EmptyState>}
+
+      {requests !== null && requests.length > 0 && (
+        <div style={{ display: "grid", gap: 12 }}>
+          {requests.map((r) => (
+            <Card key={r.id}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                <Avatar label={r.shop_name ?? "?"} size={40} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, color: colors.textPrimary }}>{r.shop_name}</div>
+                    <Pill bg={colors.amberSoft} fg={colors.amber}><ClockIcon size={11} /> Pending</Pill>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>
+                    {r.owner_name} · <PhoneIcon size={10} style={{ verticalAlign: "middle" }} /> {r.phone_number}
+                  </div>
+                  <div style={{ fontSize: 13, marginTop: 8, color: colors.textPrimary, fontWeight: 600 }}>
+                    {r.tier === "monthly" ? "Monthly" : "6 Months"} — {r.amount} AFN
+                  </div>
+                  {r.note && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 4, fontStyle: "italic" }}>"{r.note}"</div>}
+                  {imageUrls[r.id] && (
+                    <a href={imageUrls[r.id]} target="_blank" rel="noreferrer">
+                      <img src={imageUrls[r.id]} alt="Payment proof" style={{ maxWidth: 180, marginTop: 8, borderRadius: radius.sm, display: "block" }} />
+                    </a>
+                  )}
+                  <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 8 }}>{new Date(r.created_at).toLocaleString()}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    disabled={busyId === r.id}
+                    onClick={() => approve(r)}
+                    style={{ width: 34, height: 34, borderRadius: radius.pill, border: "none", background: colors.successSoft, color: colors.success, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    title="Approve"
+                  >
+                    <CheckIcon size={16} />
+                  </button>
+                  <button
+                    disabled={busyId === r.id}
+                    onClick={() => reject(r)}
+                    style={{ width: 34, height: 34, borderRadius: radius.pill, border: "none", background: colors.dangerSoft, color: colors.danger, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    title="Reject"
+                  >
+                    <XIcon size={16} />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
-      ))}
-
-      {requests.length === 0 && <p style={{ color: "#888" }}>No pending manual payment claims.</p>}
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import { colors, inputStyle } from "../../theme";
-import { Card, DateGroupHeader, EmptyState, IconBadge } from "../../components/ui";
+import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, TrendingIcon } from "../../components/icons";
 
 const RECENT_LIMIT = 10;
@@ -34,7 +34,9 @@ export default function PricesHome() {
   const { tr } = useTranslation();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<string>("");
-  const [prices, setPrices] = useState<PriceRow[]>([]);
+  // `null` = not loaded yet, distinct from `[]` = loaded and empty —
+  // avoids flashing the empty-state message before real data arrives.
+  const [prices, setPrices] = useState<PriceRow[] | null>(null);
 
   useEffect(() => {
     supabase.from("markets").select("id, name_en, city").eq("is_active", true).then(({ data }) => {
@@ -49,6 +51,7 @@ export default function PricesHome() {
   }, [selectedMarket]);
 
   async function loadPrices() {
+    setPrices(null);
     const { data } = await supabase
       .from("prices")
       .select("id, commodity_id, price, price_date, created_at, change_from_previous, commodities(name_en)")
@@ -83,9 +86,11 @@ export default function PricesHome() {
         </select>
       )}
 
-      {prices.length === 0 && <EmptyState>{tr("prices.none")}</EmptyState>}
+      {prices === null && <LoadingRows count={4} />}
 
-      {prices.length > 0 && (
+      {prices !== null && prices.length === 0 && <EmptyState>{tr("prices.none")}</EmptyState>}
+
+      {prices !== null && prices.length > 0 && (
         <Card style={{ padding: 4 }}>
           {prices.map((p, i) => {
             const groupLabel = dateGroupLabel(p.created_at, dateSystem, digitStyle, tr);
