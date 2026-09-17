@@ -11,6 +11,7 @@ import {
   GlobeIcon,
   LockIcon,
   LogOutIcon,
+  StoreIcon,
   SwapIcon,
 } from "../../components/icons";
 
@@ -82,6 +83,7 @@ export default function SettingsScreen() {
       <section style={{ marginTop: 24 }}>
         <Card style={{ padding: 4 }}>
           <SettingsRow icon={<CrownIcon size={18} />} tone="amber" label={tr("settings.manageSubscription")} onClick={() => navigate("/subscription")} first />
+          <SettingsRow icon={<StoreIcon size={18} />} tone="primary" label={tr("shopProfile.title")} onClick={() => navigate("/settings/shop-profile")} />
           <SettingsRow icon={<SwapIcon size={18} />} tone="purple" label={tr("settings.currencyConverter")} onClick={() => navigate("/tools/currency-converter")} />
           <SettingsRow icon={<LockIcon size={18} />} tone="primary" label={tr("settings.changePassword")} onClick={() => navigate("/settings/change-password")} />
           <SettingsRow icon={<LogOutIcon size={18} />} tone="danger" label={tr("settings.logout")} onClick={handleLogout} />

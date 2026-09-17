@@ -3,15 +3,21 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
+import { phoneToSyntheticEmail } from "../../lib/authHelpers";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
-import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, PageHeader, SyncDot } from "../../components/ui";
-import { ArrowDownCircleIcon, ArrowUpCircleIcon, PencilIcon, PlusIcon } from "../../components/icons";
+import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, PageHeader, SegmentedControl, SyncDot } from "../../components/ui";
+import { AlertIcon, ArrowDownCircleIcon, ArrowUpCircleIcon, EyeIcon, PencilIcon, PlusIcon } from "../../components/icons";
+import ReceiptModal from "../../components/ReceiptModal";
+import { fetchShopProfile, type ShopProfile } from "../../lib/shopProfile";
+import { buildLedgerReceiptPdf, downloadPdf, whatsAppShareLink } from "../../lib/receipt";
 
 const PAGE_SIZE = 10;
+type Currency = "AFN" | "PKR";
+type ViewFilter = "both" | Currency;
 
 interface ContactProfile {
   name: string;
@@ -25,6 +31,7 @@ interface LedgerEntry {
   client_id: string;
   entry_type: "credit" | "debit";
   amount: number;
+  currency: Currency;
   note: string | null;
   entry_date: string;
   syncStatus?: "pending" | "synced" | "not_found";
@@ -44,9 +51,20 @@ export default function CounterpartyLedgerDetail() {
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [entryType, setEntryType] = useState<"credit" | "debit">("credit");
   const [amount, setAmount] = useState("");
+  // Deliberately starts empty (not "AFN") — a contact can hold both
+  // currencies now, so the user must actively choose one each time
+  // rather than risk recording the wrong currency via an unnoticed
+  // default. Submit is blocked with a clear error until they pick.
+  const [entryCurrency, setEntryCurrency] = useState<Currency | "">("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+
+  // Which currency's entries/totals are currently shown. Defaults to
+  // "both" (nothing hidden by default), but is always an explicit,
+  // visible choice — never silently assumed — per "the user should
+  // be deliberate about it."
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("both");
 
   // Contact editing
   const [editingContact, setEditingContact] = useState(false);
@@ -55,11 +73,26 @@ export default function CounterpartyLedgerDetail() {
   const [editWhatsapp, setEditWhatsapp] = useState("");
   const [editAddress, setEditAddress] = useState("");
 
-  // Entry editing
+  // Entry editing — prefilling the CURRENT currency here is fine
+  // (this is correcting an existing record, not entering a new one).
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editEntryType, setEditEntryType] = useState<"credit" | "debit">("credit");
   const [editEntryAmount, setEditEntryAmount] = useState("");
+  const [editEntryCurrency, setEditEntryCurrency] = useState<Currency>("AFN");
   const [editEntryNote, setEditEntryNote] = useState("");
+
+  // Settle Account (حساب تصفيه کړی) — wipes every entry for this
+  // contact, in BOTH currencies, after re-verifying the owner's
+  // login password.
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [settlePassword, setSettlePassword] = useState("");
+  const [settleBusy, setSettleBusy] = useState(false);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleSuccess, setSettleSuccess] = useState(false);
+
+  // Account receipt — shop profile fetched lazily on first open.
+  const [shopProfile, setShopProfile] = useState<ShopProfile | null>(null);
+  const [showAccountReceipt, setShowAccountReceipt] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -92,7 +125,7 @@ export default function CounterpartyLedgerDetail() {
   async function loadEntries() {
     const { data, error: loadErr } = await supabase
       .from("ledger_entries")
-      .select("id, client_id, entry_type, amount, note, entry_date")
+      .select("id, client_id, entry_type, amount, currency, note, entry_date")
       .eq("profile_id", profileId)
       .eq("counterparty_id", counterpartyId)
       .order("entry_date", { ascending: false });
@@ -100,6 +133,7 @@ export default function CounterpartyLedgerDetail() {
     if (loadErr) {
       console.error("failed to load entries:", loadErr);
       setError("Couldn't load entries.");
+      setEntries([]);
       return;
     }
 
@@ -109,13 +143,32 @@ export default function CounterpartyLedgerDetail() {
     setEntries(withStatus);
   }
 
-  const balance = (entries ?? []).reduce((sum, e) => sum + (e.entry_type === "credit" ? e.amount : -e.amount), 0);
-  const given = (entries ?? []).filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
-  const received = (entries ?? []).filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
+  function totalsFor(currency: Currency) {
+    const rows = (entries ?? []).filter((e) => e.currency === currency);
+    const given = rows.filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
+    const received = rows.filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
+    return { given, received, balance: given - received, count: rows.length };
+  }
+  const pkrTotals = totalsFor("PKR");
+  const hasAnyPkr = pkrTotals.count > 0;
+
+  // Which currency block(s) to render given the current filter — a
+  // currency with zero entries is only shown if the user explicitly
+  // filtered to it (so switching to "PKR" on an AFN-only contact
+  // still shows a clear zero, not a silently vanished section).
+  const visibleCurrencies: Currency[] =
+    viewFilter === "both" ? (["AFN", "PKR"] as Currency[]).filter((c) => totalsFor(c).count > 0 || c === "AFN") : [viewFilter];
+
+  const filteredEntries = (entries ?? []).filter((e) => viewFilter === "both" || e.currency === viewFilter);
 
   async function handleAddEntry(e: FormEvent) {
     e.preventDefault();
     if (!profileId || !counterpartyId || !amount) return;
+    if (!entryCurrency) {
+      setError(tr("ledger.selectCurrencyRequired"));
+      return;
+    }
+    setError(null);
 
     const clientId = generateClientId();
     await enqueueWrite("ledger_entries", clientId, {
@@ -124,6 +177,7 @@ export default function CounterpartyLedgerDetail() {
       counterparty_id: counterpartyId,
       entry_type: entryType,
       amount: Number(amount),
+      currency: entryCurrency,
       note: note || null,
       entry_date: new Date().toISOString(),
     });
@@ -140,6 +194,7 @@ export default function CounterpartyLedgerDetail() {
         client_id: clientId,
         entry_type: entryType,
         amount: Number(amount),
+        currency: entryCurrency,
         note,
         entry_date: new Date().toISOString(),
         syncStatus,
@@ -148,6 +203,7 @@ export default function CounterpartyLedgerDetail() {
     ]);
 
     setAmount("");
+    setEntryCurrency("");
     setNote("");
     setShowNewEntry(false);
     setPage(1);
@@ -181,6 +237,7 @@ export default function CounterpartyLedgerDetail() {
     setEditingEntryId(entry.client_id);
     setEditEntryType(entry.entry_type);
     setEditEntryAmount(String(entry.amount));
+    setEditEntryCurrency(entry.currency);
     setEditEntryNote(entry.note ?? "");
   }
 
@@ -194,6 +251,7 @@ export default function CounterpartyLedgerDetail() {
       .update({
         entry_type: editEntryType,
         amount: Number(editEntryAmount),
+        currency: editEntryCurrency,
         note: editEntryNote || null,
         updated_at: new Date().toISOString(),
       })
@@ -208,14 +266,88 @@ export default function CounterpartyLedgerDetail() {
     setEntries((prev) =>
       (prev ?? []).map((e) =>
         e.client_id === entry.client_id
-          ? { ...e, entry_type: editEntryType, amount: Number(editEntryAmount), note: editEntryNote }
+          ? { ...e, entry_type: editEntryType, amount: Number(editEntryAmount), currency: editEntryCurrency, note: editEntryNote }
           : e
       )
     );
     setEditingEntryId(null);
   }
 
-  const pagedEntries = (entries ?? []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  async function handleSettleAccount(e: FormEvent) {
+    e.preventDefault();
+    if (!counterpartyId) return;
+    setSettleBusy(true);
+    setSettleError(null);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("not logged in");
+
+      // Read from profiles.phone_number (the owner's own login phone),
+      // NOT the counterparty's — this is verifying the shop owner,
+      // same pattern as ChangePasswordScreen's re-auth step.
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone_number")
+        .eq("id", userData.user.id)
+        .single();
+
+      if (!profile?.phone_number) throw new Error("no profile phone number");
+
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: phoneToSyntheticEmail(profile.phone_number),
+        password: settlePassword,
+      });
+
+      if (reauthError) {
+        setSettleError(tr("password.incorrectCurrent"));
+        setSettleBusy(false);
+        return;
+      }
+
+      const { error: deleteError } = await supabase
+        .from("ledger_entries")
+        .delete()
+        .eq("counterparty_id", counterpartyId)
+        .eq("profile_id", userData.user.id);
+
+      if (deleteError) {
+        console.error("failed to settle account:", deleteError);
+        setSettleError(tr("ledger.settleError"));
+        setSettleBusy(false);
+        return;
+      }
+
+      setEntries([]);
+      setSettleSuccess(true);
+      setSettlePassword("");
+      setTimeout(() => {
+        setShowSettleModal(false);
+        setSettleSuccess(false);
+      }, 1400);
+    } catch (err) {
+      console.error("settle account failed:", err);
+      setSettleError(tr("ledger.settleError"));
+    } finally {
+      setSettleBusy(false);
+    }
+  }
+
+  async function openAccountReceipt() {
+    setError(null);
+    let profile = shopProfile;
+    if (!profile) {
+      profile = await fetchShopProfile();
+      if (!profile) {
+        setError(tr("receipt.shopProfileMissing"));
+        return;
+      }
+      setShopProfile(profile);
+    }
+    setShowAccountReceipt(true);
+  }
+
+  const pagedEntries = filteredEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   let lastGroupLabel: string | null = null;
 
   return (
@@ -262,34 +394,72 @@ export default function CounterpartyLedgerDetail() {
         </Card>
       )}
 
-      <div style={{ textAlign: "center", margin: "18px 0 4px" }}>
-        <div style={{ fontSize: 12, color: colors.textSecondary }}>{tr("ledger.totalBalance")}</div>
-        <div style={{ fontSize: 30, fontWeight: 800, color: balance >= 0 ? colors.success : colors.danger }}>
-          {formatNumber(Math.abs(balance))} <span style={{ fontSize: 14, color: colors.textSecondary, fontWeight: 600 }}>AFN</span>
-        </div>
+      {/* Currency view filter — always explicit, defaults to "both" */}
+      <div style={{ marginTop: 4 }}>
+        <SegmentedControl
+          value={viewFilter}
+          onChange={setViewFilter}
+          options={[
+            { value: "both" as ViewFilter, label: tr("ledger.viewBoth") },
+            { value: "AFN" as ViewFilter, label: "AFN" },
+            { value: "PKR" as ViewFilter, label: "PKR" },
+          ]}
+        />
       </div>
 
-      <div style={{ display: "flex", gap: 10, margin: "14px 0" }}>
-        <div style={{ flex: 1, background: colors.successSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
-          <ArrowDownCircleIcon size={20} color={colors.success} />
-          <div>
-            <div style={{ fontSize: 11, color: colors.success, fontWeight: 600 }}>{tr("ledger.given")}</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(given)}</div>
+      {visibleCurrencies.map((currency) => {
+        const t = totalsFor(currency);
+        return (
+          <div key={currency}>
+            <div style={{ textAlign: "center", margin: "18px 0 4px" }}>
+              <div style={{ fontSize: 12, color: colors.textSecondary }}>{tr("ledger.totalBalance")} · {currency}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: t.balance >= 0 ? colors.success : colors.danger }}>
+                {formatNumber(Math.abs(t.balance))} <span style={{ fontSize: 13, color: colors.textSecondary, fontWeight: 600 }}>{currency}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, margin: "10px 0" }}>
+              <div style={{ flex: 1, background: colors.successSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
+                <ArrowDownCircleIcon size={20} color={colors.success} />
+                <div>
+                  <div style={{ fontSize: 11, color: colors.success, fontWeight: 600 }}>{tr("ledger.given")}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(t.given)}</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, background: colors.dangerSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
+                <ArrowUpCircleIcon size={20} color={colors.danger} />
+                <div>
+                  <div style={{ fontSize: 11, color: colors.danger, fontWeight: 600 }}>{tr("ledger.received")}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(t.received)}</div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div style={{ flex: 1, background: colors.dangerSoft, padding: "10px 12px", borderRadius: radius.md, display: "flex", alignItems: "center", gap: 8 }}>
-          <ArrowUpCircleIcon size={20} color={colors.danger} />
-          <div>
-            <div style={{ fontSize: 11, color: colors.danger, fontWeight: 600 }}>{tr("ledger.received")}</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(received)}</div>
-          </div>
-        </div>
-      </div>
+        );
+      })}
 
-      <button onClick={() => setShowNewEntry((v) => !v)} style={{ ...primaryButtonStyle, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+      {entries !== null && entries.length > 0 && (
+        <button
+          onClick={() => setShowSettleModal(true)}
+          style={{ display: "block", margin: "4px auto 0", background: "none", border: "none", color: colors.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}
+        >
+          {tr("ledger.settleAccount")}
+        </button>
+      )}
+
+      <button onClick={() => setShowNewEntry((v) => !v)} style={{ ...primaryButtonStyle, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
         <PlusIcon size={17} />
         {tr("ledger.newEntry")}
       </button>
+
+      {entries !== null && entries.length > 0 && (
+        <button
+          onClick={openAccountReceipt}
+          style={{ ...secondaryButtonStyle, marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+        >
+          <EyeIcon size={15} />
+          {tr("receipt.accountReceipt")}
+        </button>
+      )}
 
       {showNewEntry && (
         <Card style={{ marginTop: 12 }}>
@@ -303,6 +473,18 @@ export default function CounterpartyLedgerDetail() {
               negativeIcon={<ArrowUpCircleIcon size={16} />}
             />
             <input placeholder={tr("ledger.amount")} type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={inputStyle} />
+            <div>
+              <select
+                value={entryCurrency}
+                onChange={(e) => setEntryCurrency(e.target.value as Currency)}
+                required
+                style={{ ...inputStyle, color: entryCurrency ? colors.textPrimary : colors.textFaint }}
+              >
+                <option value="" disabled>{tr("ledger.selectCurrency")}</option>
+                <option value="AFN">AFN</option>
+                <option value="PKR">PKR</option>
+              </select>
+            </div>
             <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
             <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
           </form>
@@ -311,8 +493,10 @@ export default function CounterpartyLedgerDetail() {
 
       <div style={{ marginTop: 20 }}>
         {entries === null && <LoadingRows count={4} />}
-        {entries !== null && entries.length === 0 && <EmptyState>{tr("ledger.noEntries")}</EmptyState>}
-        {entries !== null && entries.length > 0 && (
+        {entries !== null && filteredEntries.length === 0 && (
+          <EmptyState>{entries.length === 0 ? tr("ledger.noEntries") : tr("ledger.noMatches")}</EmptyState>
+        )}
+        {entries !== null && filteredEntries.length > 0 && (
           <Card style={{ padding: 4 }}>
             {pagedEntries.map((entry, i) => {
               const groupLabel = dateGroupLabel(entry.entry_date, dateSystem, digitStyle, tr);
@@ -337,6 +521,7 @@ export default function CounterpartyLedgerDetail() {
                       <div style={{ textAlign: "end" }}>
                         <div style={{ color: isCredit ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
                           {isCredit ? "+" : "-"}{formatNumber(entry.amount)}
+                          {hasAnyPkr && <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.7 }}> {entry.currency}</span>}
                         </div>
                         <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <SyncDot synced={entry.syncStatus === "synced"} />
@@ -363,6 +548,10 @@ export default function CounterpartyLedgerDetail() {
                         negativeIcon={<ArrowUpCircleIcon size={16} />}
                       />
                       <input type="number" value={editEntryAmount} onChange={(e) => setEditEntryAmount(e.target.value)} style={inputStyle} />
+                      <select value={editEntryCurrency} onChange={(e) => setEditEntryCurrency(e.target.value as Currency)} style={inputStyle}>
+                        <option value="AFN">AFN</option>
+                        <option value="PKR">PKR</option>
+                      </select>
                       <input value={editEntryNote} onChange={(e) => setEditEntryNote(e.target.value)} style={inputStyle} />
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => handleSaveEntry(entry)} style={{ ...primaryButtonStyle, flex: 1 }}>{tr("common.save")}</button>
@@ -375,8 +564,142 @@ export default function CounterpartyLedgerDetail() {
             })}
           </Card>
         )}
-        <Pagination page={page} totalItems={(entries ?? []).length} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} totalItems={filteredEntries.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
+
+      {showSettleModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(16, 27, 51, 0.45)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => !settleBusy && setShowSettleModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: colors.surface,
+              borderRadius: "20px 20px 0 0",
+              padding: 20,
+              width: "100%",
+              maxWidth: 480,
+              boxSizing: "border-box",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 40, height: 40, borderRadius: radius.pill, background: colors.dangerSoft, color: colors.danger, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <AlertIcon size={20} />
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.textPrimary }}>{tr("ledger.settleAccount")}</div>
+            </div>
+
+            <p style={{ fontSize: 13, color: colors.textSecondary, margin: "0 0 14px" }}>
+              {tr("ledger.settleWarning")} {hasAnyPkr ? tr("ledger.settleWarningBothCurrencies") : ""}
+            </p>
+
+            {settleSuccess ? (
+              <p style={{ color: colors.success, fontSize: 13, background: colors.successSoft, padding: "10px 12px", borderRadius: radius.sm, margin: 0 }}>
+                {tr("ledger.settleSuccess")}
+              </p>
+            ) : (
+              <form onSubmit={handleSettleAccount} style={{ display: "grid", gap: 10 }}>
+                {settleError && (
+                  <p style={{ color: colors.danger, fontSize: 13, background: colors.dangerSoft, padding: "9px 12px", borderRadius: radius.sm, margin: 0 }}>
+                    {settleError}
+                  </p>
+                )}
+                <input
+                  type="password"
+                  placeholder={tr("ledger.settlePasswordPrompt")}
+                  value={settlePassword}
+                  onChange={(e) => setSettlePassword(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="submit"
+                    disabled={settleBusy}
+                    style={{ flex: 1, padding: "12px 16px", fontSize: 14, fontWeight: 700, color: colors.white, background: colors.danger, border: "none", borderRadius: radius.md, cursor: "pointer", opacity: settleBusy ? 0.7 : 1 }}
+                  >
+                    {settleBusy ? "…" : tr("ledger.settleConfirmButton")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={settleBusy}
+                    onClick={() => { setShowSettleModal(false); setSettleError(null); setSettlePassword(""); }}
+                    style={{ ...secondaryButtonStyle, flex: 1 }}
+                  >
+                    {tr("ledger.cancel")}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAccountReceipt && shopProfile && contact && (
+        <ReceiptModal
+          onClose={() => setShowAccountReceipt(false)}
+          shop={shopProfile}
+          title={tr("receipt.accountStatement")}
+          dateLabel={new Date().toLocaleDateString()}
+          party={{
+            label: tr("ledger.name"),
+            name: contact.name,
+            phone: contact.phone_number,
+            whatsapp: contact.whatsapp_number,
+            address: contact.address,
+          }}
+          rows={visibleCurrencies.flatMap((currency) => {
+            const t = totalsFor(currency);
+            return [
+              { label: `${tr("ledger.given")} (${currency})`, value: formatNumber(t.given), tone: "success" as const },
+              { label: `${tr("ledger.received")} (${currency})`, value: formatNumber(t.received), tone: "danger" as const },
+            ];
+          })}
+          totalLabel={tr("ledger.totalBalance")}
+          totalValue={visibleCurrencies
+            .map((c) => {
+              const t = totalsFor(c);
+              return `${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))} ${c}`;
+            })
+            .join("  /  ")}
+          onDownload={async () => {
+            const doc = await buildLedgerReceiptPdf({
+              shop: shopProfile,
+              counterpartyName: contact.name,
+              counterpartyPhone: contact.phone_number,
+              counterpartyWhatsapp: contact.whatsapp_number,
+              counterpartyAddress: contact.address,
+              entries: filteredEntries.map((e) => ({
+                entry_date: e.entry_date,
+                entry_type: e.entry_type,
+                amount: e.amount,
+                currency: e.currency,
+                note: e.note,
+              })),
+            });
+            downloadPdf(doc, `account-statement-${contact.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+          }}
+          whatsappHref={whatsAppShareLink(
+            `${shopProfile.shop_name} — Account Statement\n${contact.name}\n` +
+              visibleCurrencies
+                .map((c) => {
+                  const t = totalsFor(c);
+                  return `${c}: Given ${formatNumber(t.given)}, Received ${formatNumber(t.received)}, Balance ${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))}`;
+                })
+                .join("\n"),
+            contact.whatsapp_number || contact.phone_number
+          )}
+        />
+      )}
     </div>
   );
 }

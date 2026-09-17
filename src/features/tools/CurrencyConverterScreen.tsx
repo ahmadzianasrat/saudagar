@@ -1,43 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { colors, inputStyle, radius, shadow } from "../../theme";
 import { Card, PageHeader } from "../../components/ui";
 import { SwapIcon } from "../../components/icons";
+import { afnToPkr, loadRates, pkrToAfn, saveRates, type Rates } from "../../lib/currencyRates";
 
-// No live exchange-rate API — rates are set manually and persisted
-// locally. INR removed per request (near-zero usage). AFN<->PKR has
-// TWO possible rate definitions (1000 AFN = ? PKR, or 1000 PKR = ? AFN)
-// which won't always agree exactly — rather than silently picking one,
-// the user explicitly selects which is authoritative via a radio
-// button, avoiding a conflict between two numbers that might drift
-// apart if only one gets updated.
-const STORAGE_KEY = "saudagar:currency-rates-v2";
-
-interface Rates {
-  afnPerUsd: number;        // "1 USD = ? AFN"
-  pkrPer1000Afn: number;    // "1000 AFN = ? PKR"
-  afnPer1000Pkr: number;    // "1000 PKR = ? AFN"
-  afnPkrDirection: "afn_to_pkr" | "pkr_to_afn";
-}
-
-const DEFAULT_RATES: Rates = {
-  afnPerUsd: 88,
-  pkrPer1000Afn: 3140,
-  afnPer1000Pkr: 318.5,
-  afnPkrDirection: "afn_to_pkr",
-};
-
-function loadRates(): Rates {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULT_RATES, ...JSON.parse(raw) } : DEFAULT_RATES;
-  } catch {
-    return DEFAULT_RATES;
-  }
-}
-
+// Rate storage/conversion logic now lives in lib/currencyRates.ts,
+// shared with the inventory purchase/sale forms (Phase 3
+// multi-currency) — this screen is just the UI for viewing/editing it.
 const CURRENCIES = ["AFN", "USD", "PKR"];
 
 export default function CurrencyConverterScreen() {
@@ -45,32 +17,30 @@ export default function CurrencyConverterScreen() {
   const { tr } = useTranslation();
   const { formatNumber } = useLanguage();
 
-  const [rates, setRates] = useState<Rates>(loadRates);
+  const [rates, setRatesState] = useState<Rates>(loadRates);
   const [editingRates, setEditingRates] = useState(false);
   const [amount, setAmount] = useState("1");
   const [fromCurrency, setFromCurrency] = useState("AFN");
   const [toCurrency, setToCurrency] = useState("USD");
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rates));
-  }, [rates]);
+  function setRates(updater: (prev: Rates) => Rates) {
+    setRatesState((prev) => {
+      const next = updater(prev);
+      saveRates(next);
+      return next;
+    });
+  }
 
   function toAFN(value: number, currency: string): number {
     if (currency === "AFN") return value;
     if (currency === "USD") return value * rates.afnPerUsd;
-    // PKR
-    return rates.afnPkrDirection === "pkr_to_afn"
-      ? (value / 1000) * rates.afnPer1000Pkr
-      : value / (rates.pkrPer1000Afn / 1000);
+    return pkrToAfn(value, rates);
   }
 
   function fromAFN(value: number, currency: string): number {
     if (currency === "AFN") return value;
     if (currency === "USD") return value / rates.afnPerUsd;
-    // PKR
-    return rates.afnPkrDirection === "pkr_to_afn"
-      ? (value / rates.afnPer1000Pkr) * 1000
-      : value * (rates.pkrPer1000Afn / 1000);
+    return afnToPkr(value, rates);
   }
 
   const numericAmount = Number(amount) || 0;

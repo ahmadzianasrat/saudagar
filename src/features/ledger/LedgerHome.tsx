@@ -9,9 +9,11 @@ import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle, shadow } from "../../theme";
 import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, SectionLabel, SyncDot } from "../../components/ui";
-import { ArrowDownCircleIcon, ArrowUpCircleIcon, ChevronIcon, PersonIcon, PlusIcon, WalletIcon } from "../../components/icons";
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, ChevronIcon, PersonIcon, PlusIcon, SearchIcon, WalletIcon } from "../../components/icons";
 
+const INCLUDE_INVENTORY_KEY = "saudagar:ledger-include-inventory-value";
 const PAGE_SIZE = 10;
+type Currency = "AFN" | "PKR";
 
 interface Counterparty {
   id: string;
@@ -21,8 +23,11 @@ interface Counterparty {
   address: string | null;
 }
 
+// A contact can hold both an AFN balance and a PKR balance at once —
+// they're never summed together (see totals below).
 interface CounterpartyWithBalance extends Counterparty {
-  balance: number;
+  balanceAFN: number;
+  balancePKR: number;
   lastActivity: string | null;
 }
 
@@ -31,6 +36,7 @@ interface EntryRow {
   client_id: string;
   counterparty_id: string;
   counterparty_name?: string;
+  currency: Currency;
   entry_type: "credit" | "debit";
   amount: number;
   note: string | null;
@@ -51,6 +57,19 @@ export default function LedgerHome() {
   const [allEntries, setAllEntries] = useState<EntryRow[] | null>(null);
   const [entriesPage, setEntriesPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [inventoryValue, setInventoryValue] = useState<number>(0);
+  // Whether the shop's inventory value is folded into the balance
+  // card's grand total — a display preference, not app data, so it
+  // lives in localStorage rather than the database (same pattern as
+  // the currency-converter's saved rates).
+  const [includeInventoryValue, setIncludeInventoryValue] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(INCLUDE_INVENTORY_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [newName, setNewName] = useState("");
@@ -62,6 +81,10 @@ export default function LedgerHome() {
   const [quickContactId, setQuickContactId] = useState("");
   const [quickType, setQuickType] = useState<"credit" | "debit">("credit");
   const [quickAmount, setQuickAmount] = useState("");
+  // Deliberately starts empty — a contact can hold both AFN and PKR
+  // now, so this is never pre-filled/assumed; submit is blocked with
+  // a clear error until the user actively picks one.
+  const [quickCurrency, setQuickCurrency] = useState<Currency | "">("");
   const [quickNote, setQuickNote] = useState("");
 
   useEffect(() => {
@@ -71,8 +94,36 @@ export default function LedgerHome() {
   }, []);
 
   useEffect(() => {
-    if (profileId) load();
+    if (profileId) {
+      load();
+      loadInventoryValue();
+    }
   }, [profileId]);
+
+  async function loadInventoryValue() {
+    const { data, error: invErr } = await supabase
+      .from("inventory_items")
+      .select("total_cost")
+      .eq("profile_id", profileId);
+
+    if (invErr) {
+      // Non-fatal — the checkbox just won't have a meaningful number
+      // to add. Ledger data itself loaded independently above.
+      console.error("failed to load inventory value:", invErr);
+      return;
+    }
+    setInventoryValue((data ?? []).reduce((sum, row) => sum + (row.total_cost ?? 0), 0));
+  }
+
+  function toggleIncludeInventoryValue(next: boolean) {
+    setIncludeInventoryValue(next);
+    try {
+      localStorage.setItem(INCLUDE_INVENTORY_KEY, String(next));
+    } catch {
+      // localStorage can throw in private-browsing contexts — the
+      // toggle still works for this session, it just won't persist.
+    }
+  }
 
   async function load() {
     const { data: counterparties, error: cpErr } = await supabase
@@ -90,7 +141,7 @@ export default function LedgerHome() {
 
     const { data: entries, error: entriesErr } = await supabase
       .from("ledger_entries")
-      .select("id, client_id, counterparty_id, entry_type, amount, note, entry_date")
+      .select("id, client_id, counterparty_id, entry_type, amount, note, entry_date, currency")
       .eq("profile_id", profileId)
       .order("entry_date", { ascending: false });
 
@@ -102,10 +153,12 @@ export default function LedgerHome() {
     }
 
     const nameById = new Map((counterparties ?? []).map((c) => [c.id, c.name]));
-    const balances = new Map<string, { balance: number; lastActivity: string | null }>();
+    const balances = new Map<string, { balanceAFN: number; balancePKR: number; lastActivity: string | null }>();
     for (const e of entries ?? []) {
-      const current = balances.get(e.counterparty_id) ?? { balance: 0, lastActivity: null };
-      current.balance += e.entry_type === "credit" ? e.amount : -e.amount;
+      const current = balances.get(e.counterparty_id) ?? { balanceAFN: 0, balancePKR: 0, lastActivity: null };
+      const delta = e.entry_type === "credit" ? e.amount : -e.amount;
+      if (e.currency === "PKR") current.balancePKR += delta;
+      else current.balanceAFN += delta;
       if (!current.lastActivity || e.entry_date > current.lastActivity) {
         current.lastActivity = e.entry_date;
       }
@@ -114,7 +167,8 @@ export default function LedgerHome() {
 
     const withBalances: CounterpartyWithBalance[] = (counterparties ?? []).map((c) => ({
       ...c,
-      balance: balances.get(c.id)?.balance ?? 0,
+      balanceAFN: balances.get(c.id)?.balanceAFN ?? 0,
+      balancePKR: balances.get(c.id)?.balancePKR ?? 0,
       lastActivity: balances.get(c.id)?.lastActivity ?? null,
     }));
     withBalances.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
@@ -130,9 +184,27 @@ export default function LedgerHome() {
     setAllEntries(withStatus);
   }
 
-  const totalBalance = (contacts ?? []).reduce((sum, c) => sum + c.balance, 0);
-  const totalGiven = (allEntries ?? []).filter((e) => e.entry_type === "credit").reduce((s, e) => s + e.amount, 0);
-  const totalReceived = (allEntries ?? []).filter((e) => e.entry_type === "debit").reduce((s, e) => s + e.amount, 0);
+  const hasAnyPkr = (allEntries ?? []).some((e) => e.currency === "PKR");
+
+  const totalBalanceAFN = (contacts ?? []).reduce((sum, c) => sum + c.balanceAFN, 0);
+  const totalBalancePKR = (contacts ?? []).reduce((sum, c) => sum + c.balancePKR, 0);
+  // Inventory is tracked and valued in AFN only (see InventoryHome /
+  // Phase 3 migration notes) — it only ever folds into the AFN total.
+  const grandTotalAFN = includeInventoryValue ? totalBalanceAFN + inventoryValue : totalBalanceAFN;
+
+  function sumByCurrency(type: "credit" | "debit", currency: Currency): number {
+    return (allEntries ?? [])
+      .filter((e) => e.entry_type === type && e.currency === currency)
+      .reduce((s, e) => s + e.amount, 0);
+  }
+  const totalGivenAFN = sumByCurrency("credit", "AFN");
+  const totalReceivedAFN = sumByCurrency("debit", "AFN");
+  const totalGivenPKR = sumByCurrency("credit", "PKR");
+  const totalReceivedPKR = sumByCurrency("debit", "PKR");
+
+  const filteredContacts = search.trim()
+    ? (contacts ?? []).filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : (contacts ?? []);
 
   async function handleAddContact(e: FormEvent) {
     e.preventDefault();
@@ -167,6 +239,11 @@ export default function LedgerHome() {
   async function handleQuickEntry(e: FormEvent) {
     e.preventDefault();
     if (!profileId || !quickContactId || !quickAmount) return;
+    if (!quickCurrency) {
+      setError(tr("ledger.selectCurrencyRequired"));
+      return;
+    }
+    setError(null);
 
     const clientId = generateClientId();
     await enqueueWrite("ledger_entries", clientId, {
@@ -175,6 +252,7 @@ export default function LedgerHome() {
       counterparty_id: quickContactId,
       entry_type: quickType,
       amount: Number(quickAmount),
+      currency: quickCurrency,
       note: quickNote || null,
       entry_date: new Date().toISOString(),
     });
@@ -185,10 +263,16 @@ export default function LedgerHome() {
     const syncStatus = await getSyncStatus(clientId);
 
     const contactName = (contacts ?? []).find((c) => c.id === quickContactId)?.name;
+    const delta = quickType === "credit" ? Number(quickAmount) : -Number(quickAmount);
     setContacts((prev) =>
       (prev ?? []).map((c) =>
         c.id === quickContactId
-          ? { ...c, balance: c.balance + (quickType === "credit" ? Number(quickAmount) : -Number(quickAmount)), lastActivity: new Date().toISOString() }
+          ? {
+              ...c,
+              balanceAFN: c.balanceAFN + (quickCurrency === "AFN" ? delta : 0),
+              balancePKR: c.balancePKR + (quickCurrency === "PKR" ? delta : 0),
+              lastActivity: new Date().toISOString(),
+            }
           : c
       )
     );
@@ -200,6 +284,7 @@ export default function LedgerHome() {
         client_id: clientId,
         counterparty_id: quickContactId,
         counterparty_name: contactName,
+        currency: quickCurrency,
         entry_type: quickType,
         amount: Number(quickAmount),
         note: quickNote,
@@ -210,6 +295,7 @@ export default function LedgerHome() {
     ]);
 
     setQuickAmount("");
+    setQuickCurrency("");
     setQuickNote("");
     setQuickContactId("");
     setEntriesPage(1);
@@ -249,25 +335,48 @@ export default function LedgerHome() {
         />
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.85 }}>
           <WalletIcon size={18} />
-          {tr("ledger.totalBalance")}
+          {includeInventoryValue ? tr("ledger.grandTotal") : tr("ledger.totalBalance")}
         </div>
         <div style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>
-          {formatNumber(totalBalance)} <span style={{ fontSize: 15, fontWeight: 600, opacity: 0.85 }}>AFN</span>
+          {formatNumber(grandTotalAFN)} <span style={{ fontSize: 15, fontWeight: 600, opacity: 0.85 }}>AFN</span>
         </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        {hasAnyPkr && (
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 2, opacity: 0.92 }}>
+            {formatNumber(totalBalancePKR)} <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.85 }}>PKR</span>
+          </div>
+        )}
+        <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8, fontSize: 12, opacity: 0.9, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={includeInventoryValue}
+            onChange={(e) => toggleIncludeInventoryValue(e.target.checked)}
+          />
+          {tr("ledger.includeInventoryValue")} ({formatNumber(inventoryValue)} AFN)
+        </label>
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <div style={{ flex: 1, background: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: "8px 12px" }}>
             <div style={{ fontSize: 11, opacity: 0.85, display: "flex", alignItems: "center", gap: 4 }}>
               <ArrowDownCircleIcon size={14} />
               {tr("ledger.given")}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{formatNumber(totalGiven)}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>
+              {formatNumber(totalGivenAFN)}
+              {hasAnyPkr && totalGivenPKR > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalGivenPKR)} PKR</span>
+              )}
+            </div>
           </div>
           <div style={{ flex: 1, background: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: "8px 12px" }}>
             <div style={{ fontSize: 11, opacity: 0.85, display: "flex", alignItems: "center", gap: 4 }}>
               <ArrowUpCircleIcon size={14} />
               {tr("ledger.received")}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{formatNumber(totalReceived)}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>
+              {formatNumber(totalReceivedAFN)}
+              {hasAnyPkr && totalReceivedPKR > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalReceivedPKR)} PKR</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -320,6 +429,16 @@ export default function LedgerHome() {
               negativeIcon={<ArrowUpCircleIcon size={16} />}
             />
             <input placeholder={tr("ledger.amount")} type="number" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value)} style={inputStyle} />
+            <select
+              value={quickCurrency}
+              onChange={(e) => setQuickCurrency(e.target.value as Currency)}
+              required
+              style={{ ...inputStyle, color: quickCurrency ? colors.textPrimary : colors.textFaint }}
+            >
+              <option value="" disabled>{tr("ledger.selectCurrency")}</option>
+              <option value="AFN">AFN</option>
+              <option value="PKR">PKR</option>
+            </select>
             <input placeholder={tr("ledger.note")} value={quickNote} onChange={(e) => setQuickNote(e.target.value)} style={inputStyle} />
             <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
           </form>
@@ -329,11 +448,27 @@ export default function LedgerHome() {
       {/* Contacts */}
       <div style={{ marginTop: 22 }}>
         <SectionLabel>{tr("nav.ledger")}</SectionLabel>
+
+        {contacts !== null && contacts.length > 0 && (
+          <div style={{ position: "relative", marginBottom: 10 }}>
+            <SearchIcon size={16} color={colors.textFaint} style={{ position: "absolute", insetInlineStart: 13, top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              placeholder={tr("ledger.searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...inputStyle, paddingInlineStart: 38 }}
+            />
+          </div>
+        )}
+
         {contacts === null && <LoadingRows count={4} />}
         {contacts !== null && contacts.length === 0 && <EmptyState>{tr("ledger.noContacts")}</EmptyState>}
-        {contacts !== null && contacts.length > 0 && (
+        {contacts !== null && contacts.length > 0 && filteredContacts.length === 0 && (
+          <EmptyState>{tr("ledger.noMatches")}</EmptyState>
+        )}
+        {filteredContacts.length > 0 && (
           <Card style={{ padding: 4 }}>
-            {contacts.map((c, i) => (
+            {filteredContacts.map((c, i) => (
               <div
                 key={c.id}
                 onClick={() => navigate(`/ledger/${c.id}`)}
@@ -351,8 +486,15 @@ export default function LedgerHome() {
                   <div style={{ fontWeight: 600, fontSize: 14.5, color: colors.textPrimary }}>{c.name}</div>
                   {c.whatsapp_number && <div style={{ fontSize: 11.5, color: colors.textFaint }}>{c.whatsapp_number}</div>}
                 </div>
-                <div style={{ color: c.balance >= 0 ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
-                  {c.balance < 0 && "-"}{formatNumber(Math.abs(c.balance))}
+                <div style={{ textAlign: "end" }}>
+                  <div style={{ color: c.balanceAFN >= 0 ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
+                    {c.balanceAFN < 0 && "-"}{formatNumber(Math.abs(c.balanceAFN))} <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.7 }}>AFN</span>
+                  </div>
+                  {c.balancePKR !== 0 && (
+                    <div style={{ color: c.balancePKR >= 0 ? colors.success : colors.danger, fontWeight: 700, fontSize: 12.5, marginTop: 1 }}>
+                      {c.balancePKR < 0 && "-"}{formatNumber(Math.abs(c.balancePKR))} <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.7 }}>PKR</span>
+                    </div>
+                  )}
                 </div>
                 <ChevronIcon size={16} dir="end" color={colors.textFaint} />
               </div>
@@ -399,6 +541,7 @@ export default function LedgerHome() {
                     <div style={{ textAlign: "end" }}>
                       <div style={{ color: isCredit ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
                         {isCredit ? "+" : "-"}{formatNumber(entry.amount)}
+                        {hasAnyPkr && <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.7 }}> {entry.currency}</span>}
                       </div>
                       <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                         <SyncDot synced={entry.syncStatus === "synced"} />

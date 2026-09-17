@@ -164,6 +164,43 @@ export function WalletIcon({ size = 22, color = "currentColor", style }: IconPro
   );
 }
 
+export function StoreIcon({ size = 22, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M4 9.5 5.2 4.5h13.6L20 9.5" />
+      <path d="M4 9.5a2.3 2.3 0 0 0 4.4 1 2.3 2.3 0 0 0 4.4 0 2.3 2.3 0 0 0 4.4 0 2.3 2.3 0 0 0 4.4-1" />
+      <path d="M5.5 11v8.5h13V11" />
+      <path d="M10 19.5V15h4v4.5" />
+    </svg>
+  );
+}
+
+export function DownloadIcon({ size = 16, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M12 4v11M8 11.5l4 4 4-4" />
+      <path d="M5 18.5h14" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ size = 16, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </svg>
+  );
+}
+
+export function WhatsappIcon({ size = 16, color = "currentColor", style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={style}>
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.82L2 22l5.4-1.36a9.9 9.9 0 0 0 4.64 1.16h.01c5.46 0 9.9-4.45 9.9-9.91C21.95 6.45 17.5 2 12.04 2zm0 18.06c-1.5 0-2.9-.42-4.11-1.14l-.3-.18-3.2.8.85-3.12-.2-.32a8.02 8.02 0 0 1-1.24-4.29c0-4.44 3.62-8.06 8.06-8.06 2.15 0 4.17.84 5.69 2.36a7.99 7.99 0 0 1 2.36 5.7c0 4.44-3.62 8.05-8.06 8.05zm4.42-6.02c-.24-.12-1.43-.71-1.65-.79-.22-.08-.38-.12-.55.12-.16.24-.63.79-.77.95-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z" />
+    </svg>
+  );
+}
+
 export function LockIcon({ size = 22, color = "currentColor", style }: IconProps) {
   return (
     <svg {...base(size)} stroke={color} style={style}>
