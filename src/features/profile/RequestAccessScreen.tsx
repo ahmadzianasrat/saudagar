@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { normalizeAfghanPhone } from "../../lib/phone";
 import { useTranslation } from "../../i18n/useTranslation";
 import { colors, inputStyle, primaryButtonStyle, radius, shadow } from "../../theme";
 import { CheckCircleIcon } from "../../components/icons";
@@ -23,10 +24,13 @@ export default function RequestAccessScreen({ onBack }: { onBack: () => void }) 
 
     // TODO: also collect market_id once a market picker exists — for
     // launch with a single market this can default to that market's id.
+    // Normalized to +93XXXXXXXXX so this matches whatever the owner
+    // later types at the login screen, regardless of how they typed
+    // it here (see lib/phone.ts).
     const { error: insertError } = await supabase.from("account_requests").insert({
       owner_name: form.ownerName,
       shop_name: form.shopName,
-      phone_number: form.phoneNumber,
+      phone_number: normalizeAfghanPhone(form.phoneNumber),
     });
 
     setLoading(false);

@@ -11,3 +11,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Exported so other modules (useAuth's offline fallback) can derive
+// supabase-js's default localStorage key without duplicating the URL.
+export { SUPABASE_URL };

@@ -4,7 +4,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import { colors, inputStyle } from "../../theme";
-import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows } from "../../components/ui";
+import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows, SegmentedControl } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, TrendingIcon } from "../../components/icons";
 
 const RECENT_LIMIT = 10;
@@ -20,6 +20,7 @@ interface PriceRow {
   commodity_id: string;
   commodity_name: string;
   price: number;
+  currency: "AFN" | "PKR";
   price_date: string;
   created_at: string;
   change_from_previous: number | null;
@@ -30,13 +31,14 @@ interface PriceRow {
 // a single "today's price" per commodity — this surfaces the actual
 // history/trend of uploads, not just the latest snapshot.
 export default function PricesHome() {
-  const { formatNumber, dateSystem, digitStyle } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle, currencyLabel } = useLanguage();
   const { tr } = useTranslation();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<string>("");
   // `null` = not loaded yet, distinct from `[]` = loaded and empty —
   // avoids flashing the empty-state message before real data arrives.
   const [prices, setPrices] = useState<PriceRow[] | null>(null);
+  const [currencyFilter, setCurrencyFilter] = useState<"both" | "AFN" | "PKR">("both");
 
   useEffect(() => {
     supabase.from("markets").select("id, name_en, city").eq("is_active", true).then(({ data }) => {
@@ -54,7 +56,7 @@ export default function PricesHome() {
     setPrices(null);
     const { data } = await supabase
       .from("prices")
-      .select("id, commodity_id, price, price_date, created_at, change_from_previous, commodities(name_en)")
+      .select("id, commodity_id, price, currency, price_date, created_at, change_from_previous, commodities(name_en)")
       .eq("market_id", selectedMarket)
       .order("created_at", { ascending: false })
       .limit(RECENT_LIMIT);
@@ -65,12 +67,15 @@ export default function PricesHome() {
         commodity_id: row.commodity_id,
         commodity_name: row.commodities?.name_en ?? "",
         price: row.price,
+        currency: row.currency ?? "AFN",
         price_date: row.price_date,
         created_at: row.created_at,
         change_from_previous: row.change_from_previous,
       }))
     );
   }
+
+  const filteredPrices = (prices ?? []).filter((p) => currencyFilter === "both" || p.currency === currencyFilter);
 
   let lastGroupLabel: string | null = null;
 
@@ -91,8 +96,26 @@ export default function PricesHome() {
       {prices !== null && prices.length === 0 && <EmptyState>{tr("prices.none")}</EmptyState>}
 
       {prices !== null && prices.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <SegmentedControl
+            value={currencyFilter}
+            onChange={setCurrencyFilter}
+            options={[
+              { value: "both" as const, label: tr("ledger.viewBoth") },
+              { value: "AFN" as const, label: currencyLabel("AFN") },
+              { value: "PKR" as const, label: currencyLabel("PKR") },
+            ]}
+          />
+        </div>
+      )}
+
+      {prices !== null && prices.length > 0 && filteredPrices.length === 0 && (
+        <EmptyState>{tr("prices.none")}</EmptyState>
+      )}
+
+      {filteredPrices.length > 0 && (
         <Card style={{ padding: 4 }}>
-          {prices.map((p, i) => {
+          {filteredPrices.map((p, i) => {
             const groupLabel = dateGroupLabel(p.created_at, dateSystem, digitStyle, tr);
             const showHeader = groupLabel !== lastGroupLabel;
             lastGroupLabel = groupLabel;
@@ -108,7 +131,7 @@ export default function PricesHome() {
                     <div style={{ fontSize: 11, color: colors.textFaint }}>{timeAgo(p.created_at, tr)}</div>
                   </div>
                   <div style={{ textAlign: "end" }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(p.price)} AFN</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{formatNumber(p.price)} {currencyLabel(p.currency)}</div>
                     {change !== null && (
                       <div style={{ fontSize: 11, color: up ? colors.success : colors.danger, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 }}>
                         {up ? <ArrowUpCircleIcon size={11} color={colors.success} /> : <ArrowDownCircleIcon size={11} color={colors.danger} />}

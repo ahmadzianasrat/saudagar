@@ -1,8 +1,10 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { colors, radius, shadow } from "../theme";
 import { useTranslation } from "../i18n/useTranslation";
 import { DownloadIcon, StoreIcon, WhatsappIcon } from "./icons";
 import type { ShopProfile } from "../lib/shopProfile";
+import { captureElementAsPng, downloadBlob, shareImageFile } from "../lib/receiptImage";
+import { whatsAppShareLink } from "../lib/receipt";
 
 interface ReceiptModalProps {
   onClose: () => void;
@@ -19,16 +21,22 @@ interface ReceiptModalProps {
   rows: { label: string; value: string; emphasis?: boolean; tone?: "success" | "danger" }[];
   totalLabel: string;
   totalValue: string;
-  onDownload: () => void;
-  whatsappHref: string;
+  /** Base filename, without extension — ".png" is appended. */
+  filename: string;
+  /** Plain-text summary used for the wa.me fallback (and as the Web Share caption when the image itself is shared). */
+  whatsappText: string;
+  /** Preferred recipient for the wa.me fallback, if known. */
+  whatsappPhone?: string | null;
 }
 
 // Shared "View" presentation for both transaction receipts and
 // account-statement receipts — the caller builds `rows`/`party`/totals
 // from whichever data it has, this component only handles layout.
-// This is the ONE part of the receipt flow that's fully localized
-// (plain HTML/CSS renders any script fine); the downloaded PDF is
-// English/Latin-digit only — see the note in lib/receipt.ts for why.
+// The "Download" and "Share" actions both rasterize `printableRef`
+// below (the same localized content rendered right here on screen)
+// into a PNG — so whatever language/script is showing is exactly
+// what ends up in the saved/shared image, no separate English-only
+// rendering path involved.
 export default function ReceiptModal({
   onClose,
   shop,
@@ -38,10 +46,50 @@ export default function ReceiptModal({
   rows,
   totalLabel,
   totalValue,
-  onDownload,
-  whatsappHref,
+  filename,
+  whatsappText,
+  whatsappPhone,
 }: ReceiptModalProps) {
   const { tr } = useTranslation();
+  const printableRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const [captureError, setCaptureError] = useState(false);
+
+  async function capture(): Promise<Blob> {
+    if (!printableRef.current) throw new Error("Receipt content not ready");
+    return captureElementAsPng(printableRef.current);
+  }
+
+  async function handleDownload() {
+    setBusy("download");
+    setCaptureError(false);
+    try {
+      const blob = await capture();
+      downloadBlob(blob, `${filename}.png`);
+    } catch (err) {
+      console.error("failed to render receipt image:", err);
+      setCaptureError(true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleWhatsApp() {
+    setBusy("share");
+    setCaptureError(false);
+    try {
+      const blob = await capture();
+      const shared = await shareImageFile(blob, `${filename}.png`, whatsappText, title);
+      if (!shared) {
+        window.open(whatsAppShareLink(whatsappText, whatsappPhone), "_blank");
+      }
+    } catch (err) {
+      console.error("failed to render/share receipt image:", err);
+      window.open(whatsAppShareLink(whatsappText, whatsappPhone), "_blank");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div
@@ -69,7 +117,10 @@ export default function ReceiptModal({
           boxShadow: shadow.raised,
         }}
       >
-        <div style={{ padding: 20 }}>
+        {/* Everything inside this div is what gets rasterized for
+            download/share — keep action buttons and the close
+            button OUTSIDE it, below. */}
+        <div ref={printableRef} style={{ padding: 20, background: colors.surface }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <div style={{ width: 36, height: 36, borderRadius: radius.pill, background: colors.primarySoft, color: colors.primary, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <StoreIcon size={17} />
@@ -122,12 +173,23 @@ export default function ReceiptModal({
 
         <div style={{ padding: "0 20px 20px", display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <ActionButton icon={<DownloadIcon size={15} />} label={tr("receipt.download")} onClick={onDownload} />
-            <a href={whatsappHref} target="_blank" rel="noreferrer" style={{ flex: 1, textDecoration: "none" }}>
-              <ActionButton icon={<WhatsappIcon size={15} color="#25D366" />} label={tr("receipt.whatsapp")} onClick={() => {}} tone="whatsapp" />
-            </a>
+            <ActionButton
+              icon={<DownloadIcon size={15} />}
+              label={busy === "download" ? tr("receipt.generating") : tr("receipt.download")}
+              onClick={handleDownload}
+              disabled={busy !== null}
+            />
+            <ActionButton
+              icon={<WhatsappIcon size={15} color="#25D366" />}
+              label={busy === "share" ? tr("receipt.generating") : tr("receipt.whatsapp")}
+              onClick={handleWhatsApp}
+              disabled={busy !== null}
+              tone="whatsapp"
+            />
           </div>
-          <p style={{ fontSize: 10, color: colors.textFaint, margin: 0, textAlign: "center" }}>{tr("receipt.pdfLanguageNote")}</p>
+          {captureError && (
+            <p style={{ fontSize: 11, color: colors.danger, margin: 0, textAlign: "center" }}>{tr("receipt.generateFailed")}</p>
+          )}
           <button onClick={onClose} style={{ background: "none", border: "none", color: colors.textSecondary, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "4px 0" }}>
             {tr("receipt.close")}
           </button>
@@ -137,10 +199,11 @@ export default function ReceiptModal({
   );
 }
 
-function ActionButton({ icon, label, onClick, tone }: { icon: ReactNode; label: string; onClick: () => void; tone?: "whatsapp" }) {
+function ActionButton({ icon, label, onClick, tone, disabled }: { icon: ReactNode; label: string; onClick: () => void; tone?: "whatsapp"; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       style={{
         flex: 1,
         display: "flex",
@@ -154,7 +217,8 @@ function ActionButton({ icon, label, onClick, tone }: { icon: ReactNode; label: 
         color: tone === "whatsapp" ? "#128C4A" : colors.textPrimary,
         fontSize: 12.5,
         fontWeight: 700,
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.65 : 1,
         width: "100%",
       }}
     >

@@ -3,17 +3,17 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
+import { normalizeAfghanPhone } from "../../lib/phone";
 import { phoneToSyntheticEmail } from "../../lib/authHelpers";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
-import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
+import { dateGroupLabel, formatDate, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
 import { Avatar, Card, DateGroupHeader, DirectionToggle, EmptyState, LoadingRows, PageHeader, SegmentedControl, SyncDot } from "../../components/ui";
 import { AlertIcon, ArrowDownCircleIcon, ArrowUpCircleIcon, EyeIcon, PencilIcon, PlusIcon } from "../../components/icons";
 import ReceiptModal from "../../components/ReceiptModal";
 import { fetchShopProfile, type ShopProfile } from "../../lib/shopProfile";
-import { buildLedgerReceiptPdf, downloadPdf, whatsAppShareLink } from "../../lib/receipt";
 
 const PAGE_SIZE = 10;
 type Currency = "AFN" | "PKR";
@@ -40,7 +40,7 @@ interface LedgerEntry {
 export default function CounterpartyLedgerDetail() {
   const { counterpartyId } = useParams<{ counterpartyId: string }>();
   const navigate = useNavigate();
-  const { formatNumber, dateSystem, digitStyle } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle, currencyLabel } = useLanguage();
   const { tr } = useTranslation();
 
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -213,12 +213,15 @@ export default function CounterpartyLedgerDetail() {
     e.preventDefault();
     if (!counterpartyId) return;
 
+    const normalizedMobile = normalizeAfghanPhone(editMobile);
+    const normalizedWhatsapp = editWhatsapp ? normalizeAfghanPhone(editWhatsapp) : null;
+
     const { error: updateErr } = await supabase
       .from("counterparties")
       .update({
         name: editName,
-        phone_number: editMobile,
-        whatsapp_number: editWhatsapp || null,
+        phone_number: normalizedMobile,
+        whatsapp_number: normalizedWhatsapp,
         address: editAddress || null,
       })
       .eq("id", counterpartyId);
@@ -229,7 +232,7 @@ export default function CounterpartyLedgerDetail() {
       return;
     }
 
-    setContact({ name: editName, phone_number: editMobile, whatsapp_number: editWhatsapp || null, address: editAddress || null });
+    setContact({ name: editName, phone_number: normalizedMobile, whatsapp_number: normalizedWhatsapp, address: editAddress || null });
     setEditingContact(false);
   }
 
@@ -401,8 +404,8 @@ export default function CounterpartyLedgerDetail() {
           onChange={setViewFilter}
           options={[
             { value: "both" as ViewFilter, label: tr("ledger.viewBoth") },
-            { value: "AFN" as ViewFilter, label: "AFN" },
-            { value: "PKR" as ViewFilter, label: "PKR" },
+            { value: "AFN" as ViewFilter, label: currencyLabel("AFN") },
+            { value: "PKR" as ViewFilter, label: currencyLabel("PKR") },
           ]}
         />
       </div>
@@ -412,9 +415,9 @@ export default function CounterpartyLedgerDetail() {
         return (
           <div key={currency}>
             <div style={{ textAlign: "center", margin: "18px 0 4px" }}>
-              <div style={{ fontSize: 12, color: colors.textSecondary }}>{tr("ledger.totalBalance")} · {currency}</div>
+              <div style={{ fontSize: 12, color: colors.textSecondary }}>{tr("ledger.totalBalance")} · {currencyLabel(currency)}</div>
               <div style={{ fontSize: 26, fontWeight: 800, color: t.balance >= 0 ? colors.success : colors.danger }}>
-                {formatNumber(Math.abs(t.balance))} <span style={{ fontSize: 13, color: colors.textSecondary, fontWeight: 600 }}>{currency}</span>
+                {formatNumber(Math.abs(t.balance))} <span style={{ fontSize: 13, color: colors.textSecondary, fontWeight: 600 }}>{currencyLabel(currency)}</span>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, margin: "10px 0" }}>
@@ -481,8 +484,8 @@ export default function CounterpartyLedgerDetail() {
                 style={{ ...inputStyle, color: entryCurrency ? colors.textPrimary : colors.textFaint }}
               >
                 <option value="" disabled>{tr("ledger.selectCurrency")}</option>
-                <option value="AFN">AFN</option>
-                <option value="PKR">PKR</option>
+                <option value="AFN">{currencyLabel("AFN")}</option>
+                <option value="PKR">{currencyLabel("PKR")}</option>
               </select>
             </div>
             <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
@@ -521,7 +524,7 @@ export default function CounterpartyLedgerDetail() {
                       <div style={{ textAlign: "end" }}>
                         <div style={{ color: isCredit ? colors.success : colors.danger, fontWeight: 700, fontSize: 14 }}>
                           {isCredit ? "+" : "-"}{formatNumber(entry.amount)}
-                          {hasAnyPkr && <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.7 }}> {entry.currency}</span>}
+                          {hasAnyPkr && <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.7 }}> {currencyLabel(entry.currency, "symbol")}</span>}
                         </div>
                         <div style={{ fontSize: 10.5, color: colors.textFaint, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <SyncDot synced={entry.syncStatus === "synced"} />
@@ -549,8 +552,8 @@ export default function CounterpartyLedgerDetail() {
                       />
                       <input type="number" value={editEntryAmount} onChange={(e) => setEditEntryAmount(e.target.value)} style={inputStyle} />
                       <select value={editEntryCurrency} onChange={(e) => setEditEntryCurrency(e.target.value as Currency)} style={inputStyle}>
-                        <option value="AFN">AFN</option>
-                        <option value="PKR">PKR</option>
+                        <option value="AFN">{currencyLabel("AFN")}</option>
+                        <option value="PKR">{currencyLabel("PKR")}</option>
                       </select>
                       <input value={editEntryNote} onChange={(e) => setEditEntryNote(e.target.value)} style={inputStyle} />
                       <div style={{ display: "flex", gap: 8 }}>
@@ -649,7 +652,7 @@ export default function CounterpartyLedgerDetail() {
           onClose={() => setShowAccountReceipt(false)}
           shop={shopProfile}
           title={tr("receipt.accountStatement")}
-          dateLabel={new Date().toLocaleDateString()}
+          dateLabel={formatDate(new Date(), dateSystem, digitStyle)}
           party={{
             label: tr("ledger.name"),
             name: contact.name,
@@ -659,45 +662,41 @@ export default function CounterpartyLedgerDetail() {
           }}
           rows={visibleCurrencies.flatMap((currency) => {
             const t = totalsFor(currency);
+            // Oldest-first, like a running history — even though the
+            // on-screen ledger elsewhere shows newest-first.
+            const chronological = filteredEntries
+              .filter((e) => e.currency === currency)
+              .slice()
+              .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
             return [
-              { label: `${tr("ledger.given")} (${currency})`, value: formatNumber(t.given), tone: "success" as const },
-              { label: `${tr("ledger.received")} (${currency})`, value: formatNumber(t.received), tone: "danger" as const },
+              { label: `${currencyLabel(currency)}`, value: "", emphasis: true },
+              ...chronological.map((e) => ({
+                label: `${formatDate(e.entry_date, dateSystem, digitStyle)}${e.note ? ` · ${e.note}` : ""}`,
+                value: `${e.entry_type === "credit" ? "+" : "-"}${formatNumber(e.amount)}`,
+                tone: e.entry_type === "credit" ? ("success" as const) : ("danger" as const),
+              })),
+              { label: tr("ledger.given"), value: formatNumber(t.given), tone: "success" as const },
+              { label: tr("ledger.received"), value: formatNumber(t.received), tone: "danger" as const },
             ];
           })}
           totalLabel={tr("ledger.totalBalance")}
           totalValue={visibleCurrencies
             .map((c) => {
               const t = totalsFor(c);
-              return `${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))} ${c}`;
+              return `${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))} ${currencyLabel(c)}`;
             })
             .join("  /  ")}
-          onDownload={async () => {
-            const doc = await buildLedgerReceiptPdf({
-              shop: shopProfile,
-              counterpartyName: contact.name,
-              counterpartyPhone: contact.phone_number,
-              counterpartyWhatsapp: contact.whatsapp_number,
-              counterpartyAddress: contact.address,
-              entries: filteredEntries.map((e) => ({
-                entry_date: e.entry_date,
-                entry_type: e.entry_type,
-                amount: e.amount,
-                currency: e.currency,
-                note: e.note,
-              })),
-            });
-            downloadPdf(doc, `account-statement-${contact.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
-          }}
-          whatsappHref={whatsAppShareLink(
-            `${shopProfile.shop_name} — Account Statement\n${contact.name}\n` +
-              visibleCurrencies
-                .map((c) => {
-                  const t = totalsFor(c);
-                  return `${c}: Given ${formatNumber(t.given)}, Received ${formatNumber(t.received)}, Balance ${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))}`;
-                })
-                .join("\n"),
-            contact.whatsapp_number || contact.phone_number
-          )}
+          filename={`account-statement-${contact.name.replace(/\s+/g, "-").toLowerCase()}`}
+          whatsappText={
+            `${shopProfile.shop_name} — ${tr("receipt.accountStatement")}\n${contact.name}\n` +
+            visibleCurrencies
+              .map((c) => {
+                const t = totalsFor(c);
+                return `${currencyLabel(c)}: ${tr("ledger.given")} ${formatNumber(t.given)}, ${tr("ledger.received")} ${formatNumber(t.received)}, ${tr("ledger.totalBalance")} ${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))}`;
+              })
+              .join("\n")
+          }
+          whatsappPhone={contact.whatsapp_number || contact.phone_number}
         />
       )}
     </div>

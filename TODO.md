@@ -314,3 +314,42 @@ see section 1 and 2.**
 - [x] Diagnosed as a transient PostgREST schema-cache lag following migration 014's schema change (`is_active` column) — NOT an RLS or data problem. The `admin_users` row, its `is_active` flag, and both policies were all confirmed correct via direct SQL.
 - [x] `015_fix_admin_users_recursion.sql` replaced the self-referential "super admin reads all admins" policy with a `SECURITY DEFINER` function (`is_active_super_admin()`), removing a latent risk even though it likely wasn't the actual cause of this specific issue
 - [x] Login resolved on its own shortly after — worth remembering for next time: **after any migration that changes table structure, a brief delay or a manual `NOTIFY pgrst, 'reload schema';` may be needed before the app reflects it**, even though the database itself is already correct
+
+---
+
+## 22. Currency-per-entry follow-up round — offline login, receipts-as-image, RTL currency labels, phone normalization
+
+### 1. PWA stuck on "Loading…" forever when opened offline
+- [x] Root cause: `useAuth.ts` called `supabase.auth.getSession()` with no timeout. Offline + an expired stored token meant supabase-js's internal token-refresh fetch just hung — nothing to time it out, so `loading` never flipped to `false`.
+- [x] Fixed by racing `getSession()` against a 4s timeout (skipped entirely when `navigator.onLine === false`), falling back to whatever session is still in localStorage so the offline-first app shell (and its IndexedDB write queue) can load and work. Reconciles with a real session once an `online` event fires.
+
+### 2. Pashto loading text
+- [x] `auth.loading` in `ps.json` changed to "پرانيستل کېږي…"
+
+### 3 & 4. Receipts generated as an image (not PDF), fully localized
+- [x] Removed `jspdf` and the English/Latin-digit-only PDF builders (`buildTransactionReceiptPdf`, `buildLedgerReceiptPdf`) — jsPDF's built-in fonts can't render Pashto/Dari glyphs at all, which is why the old PDF was always forced to English regardless of app language.
+- [x] Added `html-to-image` (lazy-loaded, own ~13KB chunk, same reasoning as the old jsPDF lazy-load) and `lib/receiptImage.ts` — rasterizes the receipt's actual on-screen DOM to a PNG, so whatever script is displayed is exactly what's saved/shared.
+- [x] `ReceiptModal.tsx` now owns image generation directly (`filename`/`whatsappText`/`whatsappPhone` props replace the old `onDownload`/`whatsappHref`): Download saves a PNG; the WhatsApp button tries the Web Share API with the actual image file attached first, falling back to the old wa.me text-only link on browsers that can't share files.
+- [x] Account statement (`CounterpartyLedgerDetail.tsx`) now also includes the itemized per-entry lines (date/note/amount, oldest-first, one block per currency) in the captured image/on-screen view, matching (and improving on, since it's now properly localized) what the old PDF itemization had.
+
+### 5. RTL currency labels
+- [x] New `currencyLabel(currency, isRTL, style)` in `LanguageContext.tsx` — افغانی/کلدار for prose contexts (headings, filters, totals), ؋/₨ for tight inline spots (per-entry tags), "AFN"/"PKR" unchanged in English. Wired through `LedgerHome`, `CounterpartyLedgerDetail`, `InventoryHome` (including the `CurrencySelector` sub-component), `PricesHome`.
+
+### 6. Currency filter added to Inventory and Prices
+- [x] Both now have the same AFN/PKR/Both `SegmentedControl` the ledger detail view already had, filtering the transaction list / recent-price-activity list respectively.
+- [x] Found in the process: `prices.currency` already existed in the DB (`001_initial_schema.sql`, defaults to `'AFN'`) but the client never selected or used it — the price screen was silently assuming everything was AFN. Now selects and displays it for real.
+
+### 7. Phone numbers normalized to +93XXXXXXXXX everywhere
+- [x] New `lib/phone.ts` (`normalizeAfghanPhone`) — handles `+93`, `0093`, a local leading `0`, or a bare 9-digit number, always saved as `+93XXXXXXXXX`.
+- [x] Applied at every phone/WhatsApp entry point: login (via `phoneToSyntheticEmail`), `RequestAccessScreen`, ledger contact add (`LedgerHome`) and edit (`CounterpartyLedgerDetail`), inventory transaction party fields (`InventoryHome`), shop WhatsApp number (`ShopProfileScreen`).
+- [x] **Real pre-existing bug this fixes**: `phoneToSyntheticEmail` only stripped non-digits, so `+93793111222` vs `0793111222` vs `793111222` produced three *different* synthetic login emails for the same number — someone could register with one format and be unable to log in typing another. Normalizing before that digit-strip (both client-side and mirrored in `admin-approve-account`) makes the digits stable regardless of how the number was typed.
+
+---
+
+## To run before deploying this round
+- [ ] No new migrations — this round is app-code + one Edge Function change only.
+- [ ] **Redeploy 1 Edge Function**: `admin-approve-account` (phone normalization mirror + now stores `profiles.phone_number` normalized).
+- [ ] `npm install` in both `/` and `/admin-panel` (package.json changed: `jspdf` removed, `html-to-image` added).
+- [ ] Test offline: force airplane mode with an existing session already saved, reopen the PWA — should reach the app shell instead of hanging on the loading screen.
+- [ ] Test a receipt Download and a WhatsApp share on both a desktop browser (should fall back to the wa.me text link) and a phone (should offer the actual image via the share sheet where supported).
+- [ ] Test logging in with a phone number typed differently than it was during registration (with/without `+93`, with/without leading `0`) — should now succeed either way.

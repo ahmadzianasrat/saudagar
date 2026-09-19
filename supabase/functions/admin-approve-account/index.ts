@@ -56,8 +56,36 @@ function generatePassword(): string {
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
+// Mirrors lib/phone.ts's normalizeAfghanPhone() — kept duplicated
+// (edge functions can't share client-side modules) rather than
+// imported. Must stay in sync with that file.
+function normalizeAfghanPhone(raw: string): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return trimmed;
+  let digits = trimmed.replace(/\D/g, "");
+  if (digits.startsWith("0093")) {
+    digits = digits.slice(4);
+  } else if (digits.startsWith("93") && digits.length > 9) {
+    digits = digits.slice(2);
+  }
+  if (digits.length === 10 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  if (digits.length > 9) {
+    digits = digits.slice(-9);
+  }
+  return `+93${digits}`;
+}
+
+// Mirrors the phoneToSyntheticEmail() logic in lib/authHelpers.ts —
+// must stay in sync with that function, since a login only works if
+// both sides derive the same synthetic email from the same phone
+// number. Normalizing here too (not just client-side) means an
+// account_requests row inserted with an unnormalized number, however
+// that happened, still resolves to the same login email an owner
+// would get typing their number fresh at the login screen.
 function phoneToSyntheticEmail(phone: string): string {
-  const digitsOnly = phone.replace(/\D/g, "");
+  const digitsOnly = normalizeAfghanPhone(phone).replace(/\D/g, "");
   return `${digitsOnly}@saudagar.local`;
 }
 
@@ -107,6 +135,7 @@ serve(async (req) => {
     }
 
     const tempPassword = generatePassword();
+    const normalizedPhone = normalizeAfghanPhone(request.phone_number);
     const syntheticEmail = phoneToSyntheticEmail(request.phone_number);
 
     const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
@@ -127,7 +156,7 @@ serve(async (req) => {
 
     const { error: profileErr } = await supabase.from("profiles").insert({
       id: newUser.user.id,
-      phone_number: request.phone_number,
+      phone_number: normalizedPhone,
       owner_name: request.owner_name,
       shop_name: request.shop_name,
       market_id: request.market_id,
@@ -161,7 +190,7 @@ serve(async (req) => {
 
     return jsonResponse({
       status: "approved",
-      login_phone: request.phone_number,
+      login_phone: normalizedPhone,
       temp_password: tempPassword,
       trial_expires_at: trialExpiresAt,
     });

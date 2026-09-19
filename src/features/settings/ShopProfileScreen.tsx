@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { fetchShopProfile } from "../../lib/shopProfile";
+import { normalizeAfghanPhone } from "../../lib/phone";
 import { useTranslation } from "../../i18n/useTranslation";
 import { colors, inputStyle, primaryButtonStyle, radius } from "../../theme";
 import { Card, PageHeader } from "../../components/ui";
@@ -61,7 +62,7 @@ export default function ShopProfileScreen() {
       .update({
         owner_name: ownerName,
         shop_name: shopName,
-        whatsapp_number: whatsappNumber || null,
+        whatsapp_number: whatsappNumber ? normalizeAfghanPhone(whatsappNumber) : null,
         address: address || null,
         updated_at: new Date().toISOString(),
       })

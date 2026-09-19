@@ -45,7 +45,7 @@
   "auth.loginButton": "ننوتل",
   "auth.incorrect": "د تلیفون شمېره یا پټ نوم غلط دی.",
   "auth.newHere": "نوی یاست؟ د لاسرسي غوښتنه وکړئ",
-  "auth.loading": "بار کیږي…",
+  "auth.loading": "پرانيستل کېږي…",
   "onboarding.requestAccess": "د لاسرسي غوښتنه",
   "onboarding.ownerName": "د مالک نوم",
   "onboarding.shopName": "د دوکان نوم",
@@ -167,7 +167,6 @@
   "receipt.download": "ډاونلوډ",
   "receipt.whatsapp": "واټساپ",
   "receipt.close": "بندول",
-  "receipt.pdfLanguageNote": "ډاونلوډ شوي PDF د همغږۍ لپاره په انګلیسي دي — دا په اسکرین کې ښودنه ستاسو د اپلیکیشن په ژبه پاتې کیږي.",
   "receipt.purchaseTitle": "د پیرود رسید",
   "receipt.saleTitle": "د پلور رسید",
   "receipt.accountStatement": "د حساب بیان",
@@ -186,5 +185,7 @@
   "ledger.selectCurrency": "اسعار وټاکئ",
   "ledger.selectCurrencyRequired": "له خوندي کولو دمخه مهرباني وکړئ اسعار وټاکئ.",
   "ledger.settleWarningBothCurrencies": "دا د AFN او PKR دواړه ډوله ثبتونې شاملوي.",
-  "ledger.viewBoth": "دواړه"
+  "ledger.viewBoth": "دواړه",
+  "receipt.generating": "انځور جوړېږي…",
+  "receipt.generateFailed": "انځور جوړ نه شو — بیا هڅه وکړئ."
 }

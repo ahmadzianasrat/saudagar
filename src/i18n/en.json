@@ -167,7 +167,6 @@
   "receipt.download": "Download",
   "receipt.whatsapp": "WhatsApp",
   "receipt.close": "Close",
-  "receipt.pdfLanguageNote": "Downloaded PDFs are in English for compatibility — this on-screen view stays in your app language.",
   "receipt.purchaseTitle": "PURCHASE RECEIPT",
   "receipt.saleTitle": "SALE RECEIPT",
   "receipt.accountStatement": "ACCOUNT STATEMENT",
@@ -186,5 +185,7 @@
   "ledger.selectCurrency": "Select currency",
   "ledger.selectCurrencyRequired": "Please select a currency before saving.",
   "ledger.settleWarningBothCurrencies": "This includes both AFN and PKR entries.",
-  "ledger.viewBoth": "Both"
+  "ledger.viewBoth": "Both",
+  "receipt.generating": "Rendering image…",
+  "receipt.generateFailed": "Couldn't generate the image — please try again."
 }

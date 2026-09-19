@@ -18,6 +18,21 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 export type Language = "en" | "ps" | "da";
 export type DigitStyle = "western" | "eastern_arabic";
 export type DateSystem = "gregorian" | "shamsi";
+export type Currency = "AFN" | "PKR";
+
+// Afghani/Kaldar names in Pashto & Dari (Perso-Arabic script, shared
+// vocabulary between the two) — used instead of the "AFN"/"PKR" ISO
+// codes whenever the active language is RTL. "symbol" style is for
+// tight inline spots (table cells, amount suffixes) where the full
+// name would wrap or crowd the number; "name" style is for anything
+// prose-like (headings, filter labels, statement totals).
+const CURRENCY_NAMES_RTL: Record<Currency, string> = { AFN: "افغانی", PKR: "کلدار" };
+const CURRENCY_SYMBOLS_RTL: Record<Currency, string> = { AFN: "؋", PKR: "₨" };
+
+export function currencyLabel(currency: Currency, isRTL: boolean, style: "name" | "symbol" = "name"): string {
+  if (!isRTL) return currency;
+  return style === "symbol" ? CURRENCY_SYMBOLS_RTL[currency] : CURRENCY_NAMES_RTL[currency];
+}
 
 interface LanguagePrefs {
   language: Language;
@@ -33,6 +48,7 @@ interface LanguageContextValue extends LanguagePrefs {
   setDateSystem: (system: DateSystem) => void;
   isRTL: boolean;
   formatNumber: (value: number) => string;
+  currencyLabel: (currency: Currency, style?: "name" | "symbol") => string;
 }
 
 const STORAGE_KEY = "saudagar:prefs";
@@ -90,6 +106,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setDateSystem: (dateSystem) => setPrefs((p) => ({ ...p, dateSystem })),
     isRTL: prefs.language !== "en",
     formatNumber,
+    currencyLabel: (currency, style) => currencyLabel(currency, prefs.language !== "en", style),
   };
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

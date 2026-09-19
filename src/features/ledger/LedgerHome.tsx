@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
+import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
@@ -46,7 +47,7 @@ interface EntryRow {
 
 export default function LedgerHome() {
   const navigate = useNavigate();
-  const { formatNumber, dateSystem, digitStyle } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle, currencyLabel } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   // `null` = "haven't loaded yet", distinct from `[]` = "loaded, and
@@ -215,8 +216,8 @@ export default function LedgerHome() {
       .insert({
         owner_profile_id: profileId,
         name: newName,
-        phone_number: newMobile,
-        whatsapp_number: newWhatsapp || null,
+        phone_number: normalizeAfghanPhone(newMobile),
+        whatsapp_number: newWhatsapp ? normalizeAfghanPhone(newWhatsapp) : null,
         address: newAddress || null,
       })
       .select()
@@ -342,7 +343,7 @@ export default function LedgerHome() {
         </div>
         {hasAnyPkr && (
           <div style={{ fontSize: 17, fontWeight: 700, marginTop: 2, opacity: 0.92 }}>
-            {formatNumber(totalBalancePKR)} <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.85 }}>PKR</span>
+            {formatNumber(totalBalancePKR)} <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.85 }}>{currencyLabel("PKR")}</span>
           </div>
         )}
         <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8, fontSize: 12, opacity: 0.9, cursor: "pointer" }}>
@@ -351,7 +352,7 @@ export default function LedgerHome() {
             checked={includeInventoryValue}
             onChange={(e) => toggleIncludeInventoryValue(e.target.checked)}
           />
-          {tr("ledger.includeInventoryValue")} ({formatNumber(inventoryValue)} AFN)
+          {tr("ledger.includeInventoryValue")} ({formatNumber(inventoryValue)} {currencyLabel("AFN")})
         </label>
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <div style={{ flex: 1, background: "rgba(255,255,255,0.14)", borderRadius: radius.md, padding: "8px 12px" }}>
@@ -362,7 +363,7 @@ export default function LedgerHome() {
             <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>
               {formatNumber(totalGivenAFN)}
               {hasAnyPkr && totalGivenPKR > 0 && (
-                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalGivenPKR)} PKR</span>
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalGivenPKR)} {currencyLabel("PKR")}</span>
               )}
             </div>
           </div>
@@ -374,7 +375,7 @@ export default function LedgerHome() {
             <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>
               {formatNumber(totalReceivedAFN)}
               {hasAnyPkr && totalReceivedPKR > 0 && (
-                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalReceivedPKR)} PKR</span>
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}> · {formatNumber(totalReceivedPKR)} {currencyLabel("PKR")}</span>
               )}
             </div>
           </div>
@@ -436,8 +437,8 @@ export default function LedgerHome() {
               style={{ ...inputStyle, color: quickCurrency ? colors.textPrimary : colors.textFaint }}
             >
               <option value="" disabled>{tr("ledger.selectCurrency")}</option>
-              <option value="AFN">AFN</option>
-              <option value="PKR">PKR</option>
+              <option value="AFN">{currencyLabel("AFN")}</option>
+              <option value="PKR">{currencyLabel("PKR")}</option>
             </select>
             <input placeholder={tr("ledger.note")} value={quickNote} onChange={(e) => setQuickNote(e.target.value)} style={inputStyle} />
             <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>

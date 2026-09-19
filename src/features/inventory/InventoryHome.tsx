@@ -2,16 +2,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
 import { generateClientId } from "../../lib/uuid";
+import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, formatDateTime, timeAgo } from "../../lib/dateFormat";
 import Pagination from "../../components/Pagination";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle } from "../../theme";
-import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows, Pill, SectionLabel, SyncDot } from "../../components/ui";
+import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows, Pill, SectionLabel, SegmentedControl, SyncDot } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, BoxIcon, EyeIcon, PencilIcon, PlusIcon, SwapIcon, TrendingIcon } from "../../components/icons";
 import ReceiptModal from "../../components/ReceiptModal";
 import { fetchShopProfile, type ShopProfile } from "../../lib/shopProfile";
-import { buildTransactionReceiptPdf, downloadPdf, whatsAppShareLink } from "../../lib/receipt";
 import { loadRates, pkrToAfn } from "../../lib/currencyRates";
 
 const PAGE_SIZE = 10;
@@ -114,23 +114,25 @@ function CurrencySelector({
   amount,
   tr,
   formatNumber,
+  currencyLabel,
 }: {
   currency: "AFN" | "PKR";
   onChange: (v: "AFN" | "PKR") => void;
   amount: string;
   tr: (key: string) => string;
   formatNumber: (n: number) => string;
+  currencyLabel: (currency: "AFN" | "PKR", style?: "name" | "symbol") => string;
 }) {
   const numericAmount = Number(amount) || 0;
   return (
     <div>
       <select value={currency} onChange={(e) => onChange(e.target.value as "AFN" | "PKR")} style={{ ...inputStyle, width: "auto", minWidth: 100 }}>
-        <option value="AFN">AFN</option>
-        <option value="PKR">PKR</option>
+        <option value="AFN">{currencyLabel("AFN")}</option>
+        <option value="PKR">{currencyLabel("PKR")}</option>
       </select>
       {currency === "PKR" && numericAmount > 0 && (
         <p style={{ fontSize: 10.5, color: colors.textFaint, margin: "4px 0 0" }}>
-          {tr("inventory.convertedAmount")}: ≈ {formatNumber(pkrToAfn(numericAmount))} AFN
+          {tr("inventory.convertedAmount")}: ≈ {formatNumber(pkrToAfn(numericAmount))} {currencyLabel("AFN")}
         </p>
       )}
     </div>
@@ -138,7 +140,7 @@ function CurrencySelector({
 }
 
 export default function InventoryHome() {
-  const { formatNumber, dateSystem, digitStyle } = useLanguage();
+  const { formatNumber, dateSystem, digitStyle, currencyLabel } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   // `null` = not loaded yet, distinct from `[]` = loaded and empty —
@@ -147,6 +149,7 @@ export default function InventoryHome() {
   const [commodities, setCommodities] = useState<Commodity[]>([]);
   const [allTransactions, setAllTransactions] = useState<TransactionRow[] | null>(null);
   const [txPage, setTxPage] = useState(1);
+  const [txCurrencyFilter, setTxCurrencyFilter] = useState<"both" | "AFN" | "PKR">("both");
 
   const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
   const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment">("purchase");
@@ -320,8 +323,8 @@ export default function InventoryHome() {
       transport_cost: txType !== "adjustment" ? convert(Number(txTransportCost) || 0) : 0,
       porter_fee: txType !== "adjustment" ? convert(Number(txPorterFee) || 0) : 0,
       party_name: txType !== "adjustment" ? txPartyName || null : null,
-      party_phone: txType !== "adjustment" && txPartyName ? txPartyPhone || null : null,
-      party_whatsapp: txType !== "adjustment" && txPartyName ? txPartyWhatsapp || null : null,
+      party_phone: txType !== "adjustment" && txPartyName ? (txPartyPhone ? normalizeAfghanPhone(txPartyPhone) : null) : null,
+      party_whatsapp: txType !== "adjustment" && txPartyName ? (txPartyWhatsapp ? normalizeAfghanPhone(txPartyWhatsapp) : null) : null,
       party_address: txType !== "adjustment" && txPartyName ? txPartyAddress || null : null,
       currency: txType !== "adjustment" ? txCurrency : "AFN",
       fx_rate: txType !== "adjustment" ? fxRate : 1,
@@ -531,7 +534,10 @@ export default function InventoryHome() {
     setReceiptTx(tx);
   }
 
-  const pagedTransactions = (allTransactions ?? []).slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
+  const filteredTransactions = (allTransactions ?? []).filter(
+    (t) => txCurrencyFilter === "both" || t.currency === txCurrencyFilter
+  );
+  const pagedTransactions = filteredTransactions.slice((txPage - 1) * PAGE_SIZE, txPage * PAGE_SIZE);
   let lastGroupLabel: string | null = null;
 
   return (
@@ -595,7 +601,7 @@ export default function InventoryHome() {
                 {txType === "purchase" && (
                   <>
                     <input placeholder={tr("inventory.unitCost")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} style={inputStyle} />
-                    <CurrencySelector currency={txCurrency} onChange={setTxCurrency} amount={txUnitCost} tr={tr} formatNumber={formatNumber} />
+                    <CurrencySelector currency={txCurrency} onChange={setTxCurrency} amount={txUnitCost} tr={tr} formatNumber={formatNumber} currencyLabel={currencyLabel} />
                     <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} style={inputStyle} />
                     <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} style={inputStyle} />
 
@@ -636,7 +642,7 @@ export default function InventoryHome() {
                 {txType === "sale" && (
                   <>
                     <input placeholder={tr("inventory.salePrice")} type="number" value={txUnitCost} onChange={(e) => setTxUnitCost(e.target.value)} required style={inputStyle} />
-                    <CurrencySelector currency={txCurrency} onChange={setTxCurrency} amount={txUnitCost} tr={tr} formatNumber={formatNumber} />
+                    <CurrencySelector currency={txCurrency} onChange={setTxCurrency} amount={txUnitCost} tr={tr} formatNumber={formatNumber} currencyLabel={currencyLabel} />
                     <input placeholder={tr("inventory.transportCost")} type="number" value={txTransportCost} onChange={(e) => setTxTransportCost(e.target.value)} style={inputStyle} />
                     <input placeholder={tr("inventory.porterFee")} type="number" value={txPorterFee} onChange={(e) => setTxPorterFee(e.target.value)} style={inputStyle} />
 
@@ -732,6 +738,25 @@ export default function InventoryHome() {
         {allTransactions === null && <LoadingRows count={4} />}
         {allTransactions !== null && allTransactions.length === 0 && <EmptyState>{tr("inventory.noTransactions")}</EmptyState>}
         {allTransactions !== null && allTransactions.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <SegmentedControl
+              value={txCurrencyFilter}
+              onChange={(v) => {
+                setTxCurrencyFilter(v);
+                setTxPage(1);
+              }}
+              options={[
+                { value: "both" as const, label: tr("ledger.viewBoth") },
+                { value: "AFN" as const, label: currencyLabel("AFN") },
+                { value: "PKR" as const, label: currencyLabel("PKR") },
+              ]}
+            />
+          </div>
+        )}
+        {allTransactions !== null && allTransactions.length > 0 && filteredTransactions.length === 0 && (
+          <EmptyState>{tr("inventory.noTransactions")}</EmptyState>
+        )}
+        {filteredTransactions.length > 0 && (
           <Card style={{ padding: 4 }}>
             {pagedTransactions.map((tx, i) => {
               const groupLabel = dateGroupLabel(tx.created_at, dateSystem, digitStyle, tr);
@@ -776,10 +801,10 @@ export default function InventoryHome() {
                         </div>
                         {tx.unit_cost !== null && (
                           <>
-                            <div style={{ fontSize: 11, color: colors.textFaint }}>@ {formatNumber(tx.unit_cost)} AFN</div>
+                            <div style={{ fontSize: 11, color: colors.textFaint }}>@ {formatNumber(tx.unit_cost)} {currencyLabel("AFN")}</div>
                             {tx.currency === "PKR" && (
                               <div style={{ fontSize: 10.5, color: colors.textFaint }}>
-                                ({formatNumber(tx.unit_cost / tx.fx_rate)} PKR {tr("inventory.entered")})
+                                ({formatNumber(tx.unit_cost / tx.fx_rate)} {currencyLabel("PKR")} {tr("inventory.entered")})
                               </div>
                             )}
                             <div style={{ fontSize: 11, color: colors.textFaint }}>
@@ -838,7 +863,7 @@ export default function InventoryHome() {
             })}
           </Card>
         )}
-        <Pagination page={txPage} totalItems={(allTransactions ?? []).length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
+        <Pagination page={txPage} totalItems={filteredTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxPage} />
       </div>
 
       {receiptTx && shopProfile && (
@@ -859,9 +884,9 @@ export default function InventoryHome() {
               : undefined
           }
           rows={[
-            { label: `${receiptTx.commodity_name} (${formatNumber(Math.abs(receiptTx.quantity))} ${receiptTx.unit})`, value: receiptTx.unit_cost !== null ? `${formatNumber(receiptTx.unit_cost)} AFN / ${receiptTx.unit}` : "—" },
+            { label: `${receiptTx.commodity_name} (${formatNumber(Math.abs(receiptTx.quantity))} ${receiptTx.unit})`, value: receiptTx.unit_cost !== null ? `${formatNumber(receiptTx.unit_cost)} ${currencyLabel("AFN")} / ${receiptTx.unit}` : "—" },
             ...(receiptTx.currency === "PKR" && receiptTx.unit_cost !== null
-              ? [{ label: tr("inventory.originalAmount"), value: `${formatNumber(receiptTx.unit_cost / receiptTx.fx_rate)} PKR / ${receiptTx.unit}` }]
+              ? [{ label: tr("inventory.originalAmount"), value: `${formatNumber(receiptTx.unit_cost / receiptTx.fx_rate)} ${currencyLabel("PKR")} / ${receiptTx.unit}` }]
               : []),
             ...(receiptTx.transport_cost > 0 ? [{ label: tr("inventory.transportCost"), value: formatNumber(receiptTx.transport_cost) }] : []),
             ...(receiptTx.porter_fee > 0 ? [{ label: tr("inventory.porterFee"), value: formatNumber(receiptTx.porter_fee) }] : []),
@@ -869,30 +894,10 @@ export default function InventoryHome() {
           totalLabel={tr("receipt.total")}
           totalValue={`${formatNumber(
             (receiptTx.unit_cost !== null ? Math.abs(receiptTx.quantity) * receiptTx.unit_cost : 0) + receiptTx.transport_cost + receiptTx.porter_fee
-          )} AFN`}
-          onDownload={async () => {
-            const doc = await buildTransactionReceiptPdf({
-              shop: shopProfile,
-              currency: "AFN",
-              transactionType: receiptTx.transaction_type as "purchase" | "sale",
-              commodityName: receiptTx.commodity_name ?? "",
-              unit: receiptTx.unit ?? "",
-              quantity: Math.abs(receiptTx.quantity),
-              unitCost: receiptTx.unit_cost,
-              transportCost: receiptTx.transport_cost,
-              porterFee: receiptTx.porter_fee,
-              createdAt: receiptTx.created_at,
-              partyName: receiptTx.party_name,
-              partyPhone: receiptTx.party_phone,
-              partyWhatsapp: receiptTx.party_whatsapp,
-              partyAddress: receiptTx.party_address,
-            });
-            downloadPdf(doc, `${receiptTx.transaction_type}-receipt-${receiptTx.client_id.slice(0, 8)}.pdf`);
-          }}
-          whatsappHref={whatsAppShareLink(
-            `${shopProfile.shop_name} — ${receiptTx.transaction_type === "purchase" ? "Purchase" : "Sale"} Receipt\n${receiptTx.commodity_name}: ${formatNumber(Math.abs(receiptTx.quantity))} ${receiptTx.unit}${receiptTx.unit_cost !== null ? ` @ ${formatNumber(receiptTx.unit_cost)}` : ""}\nDate: ${formatDateTime(receiptTx.created_at, dateSystem, digitStyle)}`,
-            receiptTx.party_whatsapp || receiptTx.party_phone
-          )}
+          )} ${currencyLabel("AFN")}`}
+          filename={`${receiptTx.transaction_type}-receipt-${receiptTx.client_id.slice(0, 8)}`}
+          whatsappText={`${shopProfile.shop_name} — ${receiptTx.transaction_type === "purchase" ? tr("receipt.purchaseTitle") : tr("receipt.saleTitle")}\n${receiptTx.commodity_name}: ${formatNumber(Math.abs(receiptTx.quantity))} ${receiptTx.unit}${receiptTx.unit_cost !== null ? ` @ ${formatNumber(receiptTx.unit_cost)}` : ""}\n${tr("receipt.date")}: ${formatDateTime(receiptTx.created_at, dateSystem, digitStyle)}`}
+          whatsappPhone={receiptTx.party_whatsapp || receiptTx.party_phone}
         />
       )}
     </div>

@@ -167,7 +167,6 @@
   "receipt.download": "دانلود",
   "receipt.whatsapp": "واتساپ",
   "receipt.close": "بستن",
-  "receipt.pdfLanguageNote": "فایل‌های PDF دانلودشده برای سازگاری به انگلیسی هستند — این نمایش روی صفحه به زبان اپلیکیشن شما باقی می‌ماند.",
   "receipt.purchaseTitle": "رسید خرید",
   "receipt.saleTitle": "رسید فروش",
   "receipt.accountStatement": "صورت‌حساب",
@@ -186,5 +185,7 @@
   "ledger.selectCurrency": "واحد پول را انتخاب کنید",
   "ledger.selectCurrencyRequired": "لطفاً قبل از ذخیره، واحد پول را انتخاب کنید.",
   "ledger.settleWarningBothCurrencies": "این شامل ثبت‌های AFN و PKR هر دو می‌شود.",
-  "ledger.viewBoth": "هردو"
+  "ledger.viewBoth": "هردو",
+  "receipt.generating": "تصویر در حال ساخت است…",
+  "receipt.generateFailed": "تصویر ساخته نشد — دوباره تلاش کنید."
 }
