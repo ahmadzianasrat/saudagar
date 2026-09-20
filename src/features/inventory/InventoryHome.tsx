@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
 import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
@@ -66,6 +66,35 @@ const TX_COLOR: Record<TransactionRow["transaction_type"], string> = {
   sale: colors.danger,
   adjustment: colors.purple,
 };
+
+// Mirrors the DB trigger's math exactly (recompute_inventory_item(),
+// migration 013) for a single new transaction appended on top of the
+// item's current quantity/avg_cost_per_unit — so a queued-but-not-yet-synced
+// transaction can update the on-screen item card immediately instead
+// of the totals only changing once the write reaches the server.
+// This is an approximation good for exactly one optimistic step: the
+// server recomputes from full history and is always the source of
+// truth, which is why every screen also does a real reload once
+// SAUDAGAR_SYNCED_EVENT fires (see below).
+function applyOptimisticTransaction(
+  item: InventoryItem,
+  tx: { transaction_type: "purchase" | "sale" | "adjustment"; quantity: number; unit_cost: number | null; transport_cost: number; porter_fee: number }
+): Pick<InventoryItem, "quantity" | "avg_cost_per_unit" | "total_cost"> {
+  let runningQty = item.quantity;
+  let runningAvg = item.avg_cost_per_unit;
+
+  if (tx.transaction_type === "purchase") {
+    const priorValue = runningQty * runningAvg;
+    const newValue = tx.quantity * (tx.unit_cost ?? 0) + tx.transport_cost + tx.porter_fee;
+    runningQty = runningQty + tx.quantity;
+    if (runningQty > 0) runningAvg = (priorValue + newValue) / runningQty;
+  } else {
+    runningQty = runningQty + tx.quantity;
+  }
+
+  const quantity = Math.max(runningQty, 0);
+  return { quantity, avg_cost_per_unit: runningAvg, total_cost: quantity * runningAvg };
+}
 
 // Shared by both the purchase and sale forms — typing a name reveals
 // the rest of the contact fields, per "if someone typed in; opens
@@ -201,7 +230,7 @@ export default function InventoryHome() {
       ({ data, error: commErr }) => {
         if (commErr) {
           console.error("failed to load commodities:", commErr);
-          setError("Couldn't load commodities.");
+          setError(tr("inventory.couldntLoadCommodities"));
           return;
         }
         setCommodities(data ?? []);
@@ -216,6 +245,23 @@ export default function InventoryHome() {
     }
   }, [profileId]);
 
+  useEffect(() => {
+    // A queued write (added while offline, or just before the server
+    // round-trip finishes) only updates this screen optimistically
+    // (see applyOptimisticTransaction above) — once it actually syncs,
+    // reload for real so the item's quantity/avg cost reflect the
+    // server's trigger-computed values exactly, not the client's
+    // one-step approximation.
+    function onSynced() {
+      if (profileId) {
+        loadItems();
+        loadTransactions();
+      }
+    }
+    window.addEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+  }, [profileId]);
+
   async function loadItems() {
     const { data: inv, error: invErr } = await cachedQuery(`inventory:items:${profileId}`, () =>
       supabase
@@ -226,7 +272,7 @@ export default function InventoryHome() {
 
     if (invErr) {
       console.error("failed to load inventory_items:", invErr);
-      setError(`Couldn't load inventory: ${invErr.message}`);
+      setError(tr("inventory.couldntLoadInventory"));
       setItems([]);
       return;
     }
@@ -278,7 +324,7 @@ export default function InventoryHome() {
 
     if (txErr) {
       console.error("failed to load inventory_transactions:", txErr);
-      setError(`Couldn't load transaction history: ${txErr.message}`);
+      setError(tr("inventory.couldntLoadHistory"));
       setAllTransactions([]);
       return;
     }
@@ -421,7 +467,33 @@ export default function InventoryHome() {
 
     setAllTransactions((prev) => [...newRows, ...(prev ?? [])]);
 
-    loadItems();
+    // Update this item's on-screen quantity/avg cost/total right away
+    // (mirroring the server-side trigger's math — see
+    // applyOptimisticTransaction) instead of reloading, which offline
+    // would just re-show the stale cached figures from before this
+    // transaction and make it look like nothing was saved. Once the
+    // queued write actually syncs, the 'saudagar:synced' listener
+    // below reloads for real and replaces this estimate with the
+    // server's authoritative numbers.
+    setItems((prev) =>
+      (prev ?? []).map((it) => {
+        if (it.id !== itemId) return it;
+        let next = applyOptimisticTransaction(it, {
+          transaction_type: txType,
+          quantity: signedQty,
+          unit_cost: payload.unit_cost,
+          transport_cost: payload.transport_cost,
+          porter_fee: payload.porter_fee,
+        });
+        if (txType === "purchase" && txAdjustmentAmount.trim() !== "" && Number(txAdjustmentAmount) !== 0) {
+          next = applyOptimisticTransaction(
+            { ...it, ...next },
+            { transaction_type: "adjustment", quantity: Number(txAdjustmentAmount), unit_cost: null, transport_cost: 0, porter_fee: 0 }
+          );
+        }
+        return { ...it, ...next };
+      })
+    );
 
     setTxQuantity("");
     setTxUnitCost("");
@@ -473,7 +545,7 @@ export default function InventoryHome() {
 
     if (updateErr) {
       console.error("failed to update transaction:", updateErr);
-      setError("Couldn't save changes — check your connection and try again.");
+      setError(tr("common.couldntSaveRetry"));
       return;
     }
 
@@ -495,7 +567,7 @@ export default function InventoryHome() {
 
     if (insertError || !data) {
       console.error("failed to add inventory item:", insertError);
-      setError(`Couldn't add item: ${insertError?.message ?? "unknown error"}`);
+      setError(tr("inventory.couldntAddItem"));
       return;
     }
     loadItems();
@@ -521,7 +593,7 @@ export default function InventoryHome() {
 
     if (insertError || !data) {
       console.error("failed to create commodity:", insertError);
-      setError(`Couldn't create commodity: ${insertError?.message ?? "unknown error"}`);
+      setError(tr("inventory.couldntCreateCommodity"));
       return;
     }
 
@@ -607,8 +679,11 @@ export default function InventoryHome() {
                   // transactions yet can only sensibly start with a
                   // purchase (there's nothing to sell or adjust), so
                   // that case is pre-selected; otherwise the type is
-                  // left blank and must be chosen explicitly.
-                  const hasHistory = (allTransactions ?? []).some((t) => t.inventory_item_id === item.id);
+                  // left blank and must be chosen explicitly. Checked
+                  // against the item's own quantity/avg cost (not the
+                  // separately-loaded transaction list) so this is
+                  // correct even offline before that list has synced.
+                  const hasHistory = item.quantity !== 0 || item.avg_cost_per_unit !== 0;
                   setTxType(hasHistory ? "" : "purchase");
                   setTxQuantity("");
                   setTxUnitCost("");
@@ -633,7 +708,7 @@ export default function InventoryHome() {
             {showAddTransaction === item.id && (
               <div style={{ marginTop: 10, display: "grid", gap: 8, paddingTop: 10, borderTop: `1px solid ${colors.border}` }}>
                 <select value={txType} onChange={(e) => setTxType(e.target.value as any)} style={inputStyle}>
-                  {(allTransactions ?? []).some((t) => t.inventory_item_id === item.id) ? (
+                  {(item.quantity !== 0 || item.avg_cost_per_unit !== 0) ? (
                     <>
                       <option value="" disabled>{tr("inventory.selectTransactionType")}</option>
                       <option value="purchase">{tr("inventory.purchase")}</option>

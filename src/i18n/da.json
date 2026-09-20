@@ -188,5 +188,18 @@
   "ledger.viewBoth": "هردو",
   "receipt.generating": "تصویر در حال ساخت است…",
   "receipt.generateFailed": "تصویر ساخته نشد — دوباره تلاش کنید.",
-  "inventory.selectTransactionType": "نوع معامله را انتخاب کنید"
+  "inventory.selectTransactionType": "نوع معامله را انتخاب کنید",
+  "common.couldntSaveRetry": "تغییرات ذخیره نشد — اتصال خود را بررسی کرده و دوباره تلاش کنید.",
+  "common.somethingWentWrong": "مشکلی پیش آمد. لطفاً دوباره تلاش کنید.",
+  "ledger.couldntLoadEntries": "ورودی‌ها بارگذاری نشد.",
+  "ledger.couldntSaveContact": "تغییرات مخاطب ذخیره نشد.",
+  "ledger.couldntLoadContacts": "مخاطبین بارگذاری نشد.",
+  "ledger.couldntLoadBalances": "بیلانس بارگذاری نشد.",
+  "ledger.couldntAddContact": "مخاطب اضافه نشد — ممکن است قبلاً موجود باشد.",
+  "inventory.couldntLoadCommodities": "کالاها بارگذاری نشد.",
+  "inventory.couldntLoadInventory": "ذخیره بارگذاری نشد.",
+  "inventory.couldntLoadHistory": "تاریخچه معاملات بارگذاری نشد.",
+  "inventory.couldntAddItem": "قلم اضافه نشد. لطفاً دوباره تلاش کنید.",
+  "inventory.couldntCreateCommodity": "کالا ایجاد نشد. لطفاً دوباره تلاش کنید.",
+  "subscription.couldntUploadScreenshot": "عکس آپلود نشد. می‌توانید بدون آن ارسال کنید."
 }

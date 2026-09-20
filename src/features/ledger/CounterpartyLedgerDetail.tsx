@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
 import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
@@ -108,6 +108,14 @@ export default function CounterpartyLedgerDetail() {
     }
   }, [profileId, counterpartyId]);
 
+  useEffect(() => {
+    function onSynced() {
+      if (profileId && counterpartyId) loadEntries();
+    }
+    window.addEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+  }, [profileId, counterpartyId]);
+
   async function loadContact() {
     const { data } = await cachedQuery<ContactProfile>(`ledger:contact:${counterpartyId}`, () =>
       supabase
@@ -139,7 +147,7 @@ export default function CounterpartyLedgerDetail() {
 
     if (loadErr) {
       console.error("failed to load entries:", loadErr);
-      setError("Couldn't load entries.");
+      setError(tr("ledger.couldntLoadEntries"));
       setEntries([]);
       return;
     }
@@ -235,7 +243,7 @@ export default function CounterpartyLedgerDetail() {
 
     if (updateErr) {
       console.error("failed to update contact:", updateErr);
-      setError("Couldn't save contact changes.");
+      setError(tr("ledger.couldntSaveContact"));
       return;
     }
 
@@ -269,7 +277,7 @@ export default function CounterpartyLedgerDetail() {
 
     if (updateErr) {
       console.error("failed to update entry:", updateErr);
-      setError("Couldn't save changes — check your connection and try again.");
+      setError(tr("common.couldntSaveRetry"));
       return;
     }
 

@@ -40,7 +40,7 @@ export default function RequestAccessScreen({ onBack }: { onBack: () => void }) 
     // "pending approval" success message with nothing actually saved.
     if (insertError) {
       console.error("account_requests insert failed:", insertError);
-      setError("Something went wrong submitting your request. Please try again.");
+      setError(tr("common.somethingWentWrong"));
       return;
     }
 

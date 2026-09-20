@@ -401,3 +401,22 @@ Round 23 fixed the `getUser()` blocker and added a read-through cache, but scree
 ## To run before deploying this round
 - [ ] App code only, no migrations/Edge Functions.
 - [ ] Test offline on a device that has previously loaded Ledger/Inventory/Prices at least once online: those screens should now show the last-synced data within ~4 seconds instead of hanging on loading placeholders indefinitely.
+
+---
+
+## 25. Offline writes to Inventory looked like they didn't save
+
+Reported with screenshots: reading now works offline (round 24 fixed that), but adding a new inventory transaction offline didn't seem to do anything — the item's quantity/avg cost/total on screen stayed exactly the same after saving.
+
+- [x] Root cause: after queuing a transaction, `handleAddTransaction` called `loadItems()` to refresh the item's aggregate figures. But those figures (`quantity`, `avg_cost_per_unit`, `total_cost`) are only correct once Postgres's `recompute_inventory_item()` trigger runs server-side on the synced row — which hasn't happened yet for a transaction that's still sitting in the local offline queue. Offline, `loadItems()` just re-served the cached pre-transaction values (via `cachedQuery`'s fallback), so the item visually looked completely unchanged even though the transaction itself really had been queued and would sync once back online.
+- [x] Fixed: `handleAddTransaction` now optimistically applies the trigger's exact math client-side (new `applyOptimisticTransaction`, mirroring `recompute_inventory_item()` from migration 013 line for line) to update the item's quantity/avg cost/total immediately, instead of reloading. This is a one-step approximation, not a replacement for the trigger — so:
+- [x] Added a `saudagar:synced` event, dispatched from `flushQueue()` whenever a queued write actually reaches the server. `InventoryHome`, `LedgerHome`, and `CounterpartyLedgerDetail` all listen for it and reload for real at that point, replacing the optimistic estimate with the server's authoritative numbers. (Ledger's own optimistic updates were already correct — balances are simple sums, no server trigger involved — but it listens too, mainly so `loadInventoryValue()`, which *does* depend on the same trigger, self-corrects.)
+- [x] Also hardened the "first entry must be a purchase" check (round 23) — it was cross-referencing the separately-loaded `allTransactions` list, which could plausibly be empty/uncached independently of the item list itself and (incorrectly) lock an item with real history down to purchase-only. Now checks the item's own `quantity`/`avg_cost_per_unit` directly, which is always available whenever the item card itself is showing.
+- [x] Along the way, found and fixed ~12 error messages across Ledger/Inventory/Subscription/RequestAccess that were hardcoded in English regardless of the app's language setting (e.g. the "Couldn't load entries." seen untranslated in the screenshots) — all now go through `tr()` with proper Pashto/Dari copy.
+
+---
+
+## To run before deploying this round
+- [ ] App code only.
+- [ ] Test: add a purchase to an existing item while offline — quantity/avg cost/total should update immediately on screen. Go back online and wait ~30s (or trigger a reload) — the same figures should very briefly recompute from the server and match exactly (no visible jump if the estimate was right, which it should be for a single offline transaction).
+- [ ] Test: a brand-new commodity with zero history should still only offer "Purchase" as the transaction type, even when that check is exercised offline.

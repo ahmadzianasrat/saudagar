@@ -103,7 +103,7 @@ export default function SubscriptionScreen() {
 
       if (uploadError) {
         console.error("proof upload failed:", uploadError);
-        setError("Couldn't upload the screenshot. You can still submit without it.");
+        setError(tr("subscription.couldntUploadScreenshot"));
       } else {
         proofImagePath = path;
       }
@@ -121,7 +121,7 @@ export default function SubscriptionScreen() {
 
     if (insertError) {
       console.error("manual payment request failed:", insertError);
-      setError("Couldn't submit your request. Please try again.");
+      setError(tr("common.somethingWentWrong"));
       return;
     }
 

@@ -188,5 +188,18 @@
   "ledger.viewBoth": "Both",
   "receipt.generating": "Rendering image…",
   "receipt.generateFailed": "Couldn't generate the image — please try again.",
-  "inventory.selectTransactionType": "Select transaction type"
+  "inventory.selectTransactionType": "Select transaction type",
+  "common.couldntSaveRetry": "Couldn't save changes — check your connection and try again.",
+  "common.somethingWentWrong": "Something went wrong. Please try again.",
+  "ledger.couldntLoadEntries": "Couldn't load entries.",
+  "ledger.couldntSaveContact": "Couldn't save contact changes.",
+  "ledger.couldntLoadContacts": "Couldn't load contacts.",
+  "ledger.couldntLoadBalances": "Couldn't load balances.",
+  "ledger.couldntAddContact": "Couldn't add contact — they may already exist.",
+  "inventory.couldntLoadCommodities": "Couldn't load commodities.",
+  "inventory.couldntLoadInventory": "Couldn't load inventory.",
+  "inventory.couldntLoadHistory": "Couldn't load transaction history.",
+  "inventory.couldntAddItem": "Couldn't add item. Please try again.",
+  "inventory.couldntCreateCommodity": "Couldn't create commodity. Please try again.",
+  "subscription.couldntUploadScreenshot": "Couldn't upload the screenshot. You can still submit without it."
 }

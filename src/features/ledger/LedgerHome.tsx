@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
 import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
@@ -106,6 +106,23 @@ export default function LedgerHome() {
     }
   }, [profileId]);
 
+  useEffect(() => {
+    // Ledger balances are already updated optimistically the instant
+    // an entry is queued (see handleQuickEntry) — this is a
+    // correctness backstop for anything only the server can resolve
+    // (e.g. a queued contact add that turned out to be a duplicate)
+    // and for loadInventoryValue(), which — like inventory's own
+    // screen — depends on the server-side avg-cost trigger.
+    function onSynced() {
+      if (profileId) {
+        load();
+        loadInventoryValue();
+      }
+    }
+    window.addEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SAUDAGAR_SYNCED_EVENT, onSynced);
+  }, [profileId]);
+
   async function loadInventoryValue() {
     const { data, error: invErr } = await cachedQuery<{ total_cost: number }[]>(
       `ledger:inventory-value:${profileId}`,
@@ -143,7 +160,7 @@ export default function LedgerHome() {
 
     if (cpErr) {
       console.error("failed to load counterparties:", cpErr);
-      setError("Couldn't load contacts.");
+      setError(tr("ledger.couldntLoadContacts"));
       setContacts([]);
       setAllEntries([]);
       return;
@@ -161,7 +178,7 @@ export default function LedgerHome() {
 
     if (entriesErr) {
       console.error("failed to load ledger_entries:", entriesErr);
-      setError("Couldn't load balances.");
+      setError(tr("ledger.couldntLoadBalances"));
       setAllEntries([]);
       return;
     }
@@ -238,7 +255,7 @@ export default function LedgerHome() {
 
     if (insertError || !data) {
       console.error("failed to add contact:", insertError);
-      setError("Couldn't add contact — they may already exist.");
+      setError(tr("ledger.couldntAddContact"));
       return;
     }
 

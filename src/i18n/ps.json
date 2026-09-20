@@ -188,5 +188,18 @@
   "ledger.viewBoth": "دواړه",
   "receipt.generating": "انځور جوړېږي…",
   "receipt.generateFailed": "انځور جوړ نه شو — بیا هڅه وکړئ.",
-  "inventory.selectTransactionType": "د معاملې ډول وټاکئ"
+  "inventory.selectTransactionType": "د معاملې ډول وټاکئ",
+  "common.couldntSaveRetry": "بدلونونه خوندي نشول — خپل انټرنیټ وګورئ او بیا هڅه وکړئ.",
+  "common.somethingWentWrong": "یو څه غلط شول. مهرباني وکړئ بیا هڅه وکړئ.",
+  "ledger.couldntLoadEntries": "لیکنې نشوې لوستل کیدی.",
+  "ledger.couldntSaveContact": "د اړیکې بدلونونه خوندي نشول.",
+  "ledger.couldntLoadContacts": "اړیکې نشوې لوستل کیدی.",
+  "ledger.couldntLoadBalances": "بیلانس نشو لوستل کیدی.",
+  "ledger.couldntAddContact": "اړیکه نشوه اضافه کیدی — کیدای شي مخکې له مخکې موجوده وي.",
+  "inventory.couldntLoadCommodities": "توکي نشول لوستل کیدی.",
+  "inventory.couldntLoadInventory": "ذخیره نشوه لوستل کیدی.",
+  "inventory.couldntLoadHistory": "د معاملاتو تاریخچه نشوه لوستل کیدی.",
+  "inventory.couldntAddItem": "توکی نشو اضافه کیدی. مهرباني وکړئ بیا هڅه وکړئ.",
+  "inventory.couldntCreateCommodity": "توکی نشو جوړیدی. مهرباني وکړئ بیا هڅه وکړئ.",
+  "subscription.couldntUploadScreenshot": "انځور نشو اپلوډ کیدی. تاسو کولی شئ بیا هم پرته له انځور نه یې وسپارئ."
 }

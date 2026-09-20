@@ -174,6 +174,8 @@ export async function enqueueWrite(
   await flushQueue();
 }
 
+export const SAUDAGAR_SYNCED_EVENT = "saudagar:synced";
+
 // Attempts to push every unsynced item to Supabase. Safe to call
 // repeatedly/concurrently — items already synced are skipped, and
 // the server-side unique(profile_id, client_id) / unique(inventory_item_id,
@@ -184,6 +186,8 @@ export async function flushQueue(): Promise<void> {
   const db = await getDB();
   const all = await db.getAll("writeQueue");
   const pending = all.filter((item) => !item.synced);
+
+  let anySynced = false;
 
   for (const item of pending) {
     try {
@@ -200,11 +204,21 @@ export async function flushQueue(): Promise<void> {
       item.synced = true;
       item.lastError = undefined;
       await db.put("writeQueue", item);
+      anySynced = true;
     } catch (err) {
       // Network error mid-flight — leave pending, next trigger will retry.
       item.lastError = err instanceof Error ? err.message : String(err);
       await db.put("writeQueue", item);
     }
+  }
+
+  // Lets screens refresh their server-computed data (item quantity/
+  // avg_cost, ledger totals — anything a DB trigger recalculates)
+  // once a queued write actually lands, rather than only ever
+  // showing the client-side optimistic guess until the next manual
+  // reload. See SAUDAGAR_SYNCED_EVENT usage in the feature screens.
+  if (anySynced && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SAUDAGAR_SYNCED_EVENT));
   }
 }
 
