@@ -4,6 +4,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { dateGroupLabel, timeAgo } from "../../lib/dateFormat";
 import { colors, inputStyle } from "../../theme";
+import { cachedQuery } from "../../lib/offlineQueue";
 import { Card, DateGroupHeader, EmptyState, IconBadge, LoadingRows, SegmentedControl } from "../../components/ui";
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, TrendingIcon } from "../../components/icons";
 
@@ -41,7 +42,9 @@ export default function PricesHome() {
   const [currencyFilter, setCurrencyFilter] = useState<"both" | "AFN" | "PKR">("both");
 
   useEffect(() => {
-    supabase.from("markets").select("id, name_en, city").eq("is_active", true).then(({ data }) => {
+    cachedQuery<Market[]>("prices:markets", () =>
+      supabase.from("markets").select("id, name_en, city").eq("is_active", true)
+    ).then(({ data }) => {
       setMarkets(data ?? []);
       if (data && data.length > 0) setSelectedMarket(data[0].id);
     });
@@ -54,12 +57,14 @@ export default function PricesHome() {
 
   async function loadPrices() {
     setPrices(null);
-    const { data } = await supabase
-      .from("prices")
-      .select("id, commodity_id, price, currency, price_date, created_at, change_from_previous, commodities(name_en)")
-      .eq("market_id", selectedMarket)
-      .order("created_at", { ascending: false })
-      .limit(RECENT_LIMIT);
+    const { data } = await cachedQuery(`prices:recent:${selectedMarket}`, () =>
+      supabase
+        .from("prices")
+        .select("id, commodity_id, price, currency, price_date, created_at, change_from_previous, commodities(name_en)")
+        .eq("market_id", selectedMarket)
+        .order("created_at", { ascending: false })
+        .limit(RECENT_LIMIT)
+    );
 
     setPrices(
       (data ?? []).map((row: any) => ({

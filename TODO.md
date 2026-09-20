@@ -383,3 +383,21 @@ see section 1 and 2.**
 - [ ] Test: create a brand-new commodity, confirm its Add Transaction form only offers "Purchase" until a first transaction exists, then confirm a normal item's form opens with no type pre-selected.
 - [ ] Test: a purchase with both transport cost and porter fee set — confirm the transaction list's "Total" line includes both.
 - [ ] Test offline: with a session already saved, force airplane mode, reopen a Ledger contact / Inventory / Prices screen that was previously loaded online at least once — should show the last-synced data instead of empty lists.
+
+---
+
+## 24. Offline data loading — the real fix (screens hung on placeholders even with a populated cache)
+
+Round 23 fixed the `getUser()` blocker and added a read-through cache, but screens were still stuck on their loading skeletons offline instead of falling back to cache — screenshots showed empty "کاته" (contacts) and recent-entries sections indefinitely on a device that had real synced data.
+
+- [x] Root cause: `cachedQuery()` itself had no timeout on the live query it wraps — Supabase's query client (postgrest-js) uses plain `fetch()` with no built-in timeout, the same underlying issue as the `getSession()`-hangs-offline bug from round 22, just for table reads instead of auth. So `cachedQuery` would `await run()` and simply never get past it offline, meaning its cache-fallback code never ran at all — not a bug in the cache, a bug in never reaching it.
+- [x] Fixed: `cachedQuery()` now skips the network attempt entirely when `navigator.onLine` is false, and otherwise races the query against a 4s timeout — either way, if a live answer doesn't arrive quickly, it falls straight to the cached result (or empty, if nothing's cached yet).
+- [x] Found two more unwrapped reads with the same exposure while auditing this: `PricesHome.tsx` (`markets` + the recent-prices query — this file was missed entirely in round 22's pass) and `LedgerHome.tsx`'s `loadInventoryValue()`. Both now go through `cachedQuery()`.
+- [x] Also cleaned up a stale `vite.config.ts` comment/exclusion left over from the jsPDF-era workbox config (round 22 removed jsPDF in favor of html-to-image; the `globIgnores` for jspdf/html2canvas/purify chunks no longer matched anything, just dead config with a misleading comment).
+- [ ] Not done: `useSubscriptionStatus.ts`'s query was also wrapped for consistency, but note `hasAccess` isn't actually wired up to block any write action anywhere yet (checked — it only feeds the renewal banner today), so this was a defensive fix, not something that was visibly broken.
+
+---
+
+## To run before deploying this round
+- [ ] App code only, no migrations/Edge Functions.
+- [ ] Test offline on a device that has previously loaded Ledger/Inventory/Prices at least once online: those screens should now show the last-synced data within ~4 seconds instead of hanging on loading placeholders indefinitely.

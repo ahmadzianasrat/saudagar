@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { cachedQuery } from "./offlineQueue";
 
 export interface SubscriptionStatus {
   hasAccess: boolean; // true if active/trial and not expired — gates write access
@@ -30,14 +31,18 @@ export function useSubscriptionStatus(profileId: string | undefined): Subscripti
   const load = useCallback(async () => {
     if (!profileId) return;
 
-    const { data, error } = await supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("profile_id", profileId)
-      .eq("status", "active")
-      .order("expires_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data, error } = await cachedQuery<{ expires_at: string; tier: "trial" | "monthly" | "six_month" }>(
+      `subscription:${profileId}`,
+      () =>
+        supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("profile_id", profileId)
+          .eq("status", "active")
+          .order("expires_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+    );
 
     if (error || !data) {
       setState({ hasAccess: false, tier: null, expiresAt: null, daysUntilExpiry: null, loading: false });

@@ -26,23 +26,11 @@ export default defineConfig({
       // connection; the queue handles the actual ledger/inventory writes.
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
-        // jsPDF (added for receipts) ships optional support for an
-        // .html()-to-PDF method that pulls in html2canvas + DOMPurify
-        // as separate chunks — code we never call (receipts are built
-        // from plain data with jsPDF's text/line drawing APIs, not
-        // from DOM screenshots). It's also dynamically imported only
-        // when a receipt is actually opened, but Workbox precaches by
-        // file glob regardless of import style, so without this
-        // exclusion the PWA installer would still eagerly download
-        // ~500KB of jsPDF + its dependency chunk to every device on
-        // install, whether or not that shop ever uses receipts.
-        // Excluding it means: viewing/downloading a receipt for the
-        // first time needs a network connection (same as sending it
-        // via WhatsApp already would); core offline ledger/inventory
-        // entry — the actual offline-first requirement — is
-        // unaffected, since that goes through offlineQueue.ts, not
-        // through anything precached here.
-        globIgnores: ["**/html2canvas*.js", "**/purify*.js", "**/jspdf*.js", "**/index.es-*.js"],
+        // (Previously excluded jsPDF's optional html2canvas/DOMPurify
+        // chunks here, back when receipts were PDF-based — jsPDF is
+        // gone now in favor of html-to-image, which has no such
+        // heavy optional dependency, so there's nothing worth
+        // excluding from precache anymore.)
       },
     }),
   ],

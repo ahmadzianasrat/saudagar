@@ -107,10 +107,10 @@ export default function LedgerHome() {
   }, [profileId]);
 
   async function loadInventoryValue() {
-    const { data, error: invErr } = await supabase
-      .from("inventory_items")
-      .select("total_cost")
-      .eq("profile_id", profileId);
+    const { data, error: invErr } = await cachedQuery<{ total_cost: number }[]>(
+      `ledger:inventory-value:${profileId}`,
+      () => supabase.from("inventory_items").select("total_cost").eq("profile_id", profileId)
+    );
 
     if (invErr) {
       // Non-fatal — the checkbox just won't have a meaningful number

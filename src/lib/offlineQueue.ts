@@ -101,11 +101,41 @@ export async function cacheSet<T>(key: string, data: T): Promise<void> {
   }
 }
 
+// Supabase's query client (postgrest-js) uses the browser's fetch()
+// with no built-in timeout — same underlying issue as the
+// getSession()-hangs-offline bug fixed in useAuth.ts/authSession.ts,
+// just for table queries instead of auth. Without a bound, a query
+// made while offline can sit unresolved far longer than any user
+// would wait, which is what made screens look stuck on their loading
+// skeletons offline even with a populated cache sitting right there
+// ready to serve. Skip the network attempt entirely when already
+// offline, and otherwise give it a few seconds before falling back.
+const QUERY_TIMEOUT_MS = 4000;
+const TIMEOUT_ERROR = { message: "cachedQuery: timed out" };
+
 export async function cachedQuery<T>(
   key: string,
   run: () => PromiseLike<{ data: T | null; error: any }>
 ): Promise<{ data: T | null; error: any; fromCache: boolean }> {
-  const { data, error } = await run();
+  let result: { data: T | null; error: any };
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    result = { data: null, error: TIMEOUT_ERROR };
+  } else {
+    try {
+      const queryPromise = Promise.resolve(run()).catch((err) => ({ data: null, error: err }));
+      result = await Promise.race([
+        queryPromise,
+        new Promise<{ data: null; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: TIMEOUT_ERROR }), QUERY_TIMEOUT_MS)
+        ),
+      ]);
+    } catch (err) {
+      result = { data: null, error: err };
+    }
+  }
+
+  const { data, error } = result;
   if (!error) {
     if (data !== null) await cacheSet(key, data);
     return { data, error: null, fromCache: false };
