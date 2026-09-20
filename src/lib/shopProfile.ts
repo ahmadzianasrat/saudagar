@@ -1,4 +1,6 @@
 import { supabase } from "./supabaseClient";
+import { getCurrentUserId } from "./authSession";
+import { cachedQuery } from "./offlineQueue";
 
 export interface ShopProfile {
   owner_name: string;
@@ -9,14 +11,20 @@ export interface ShopProfile {
 }
 
 export async function fetchShopProfile(): Promise<ShopProfile | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return null;
+  // getCurrentUserId() (not supabase.auth.getUser()) so this — used
+  // for the header on every screen and for receipts — still works
+  // offline instead of silently failing before the query below even
+  // runs. See lib/authSession.ts.
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("owner_name, shop_name, phone_number, whatsapp_number, address")
-    .eq("id", userData.user.id)
-    .single();
+  const { data, error } = await cachedQuery(`profile:shop:${userId}`, () =>
+    supabase
+      .from("profiles")
+      .select("owner_name, shop_name, phone_number, whatsapp_number, address")
+      .eq("id", userId)
+      .single()
+  );
 
   if (error) {
     console.error("failed to fetch shop profile:", error);

@@ -1,44 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, SUPABASE_URL } from "./supabaseClient";
+import { supabase } from "./supabaseClient";
+import { readCachedSession } from "./authSession";
 
 // If the device is online but the network call genuinely stalls
 // (flaky connection, not fully offline), we still don't want to wait
 // forever — bounded to a few seconds before falling back.
 const GET_SESSION_TIMEOUT_MS = 4000;
-
-// supabase-js's default storage key is `sb-<project-ref>-auth-token`,
-// where <project-ref> is the first label of the Supabase URL's
-// hostname. Deriving it here (rather than hardcoding it) means this
-// keeps working if the project URL ever changes.
-function localStorageSessionKey(): string {
-  try {
-    const ref = new URL(SUPABASE_URL).hostname.split(".")[0];
-    return `sb-${ref}-auth-token`;
-  } catch {
-    return "";
-  }
-}
-
-// Best-effort read of whatever session supabase-js last persisted to
-// localStorage, bypassing supabase.auth.getSession() entirely. Used
-// only as a fallback (see below) — never as the primary path, since
-// it skips supabase-js's own token-refresh bookkeeping.
-function readCachedSession(): Session | null {
-  try {
-    const key = localStorageSessionKey();
-    if (!key) return null;
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // Different supabase-js versions have stored this either as the
-    // session object directly, or wrapped in { currentSession }.
-    const session = (parsed?.currentSession ?? parsed) as Session | null;
-    return session?.access_token ? session : null;
-  } catch {
-    return null;
-  }
-}
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);

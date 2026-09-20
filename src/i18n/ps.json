@@ -4,8 +4,8 @@
   "nav.prices": "بيې",
   "nav.settings": "تنظیمات",
   "ledger.totalBalance": "ټول بېلانس",
-  "ledger.given": "درکړل شوي",
-  "ledger.received": "اخيستل شوي",
+  "ledger.given": "بردګي",
+  "ledger.received": "رسيد",
   "ledger.newEntry": "+ نوې ليکنه",
   "ledger.synced": "همغږ شوی",
   "ledger.pending": "په تمه",
@@ -187,5 +187,6 @@
   "ledger.settleWarningBothCurrencies": "دا د AFN او PKR دواړه ډوله ثبتونې شاملوي.",
   "ledger.viewBoth": "دواړه",
   "receipt.generating": "انځور جوړېږي…",
-  "receipt.generateFailed": "انځور جوړ نه شو — بیا هڅه وکړئ."
+  "receipt.generateFailed": "انځور جوړ نه شو — بیا هڅه وکړئ.",
+  "inventory.selectTransactionType": "د معاملې ډول وټاکئ"
 }

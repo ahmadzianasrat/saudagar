@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -89,8 +90,12 @@ export default function LedgerHome() {
   const [quickNote, setQuickNote] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setProfileId(data.user.id);
+    // getCurrentUserId() reads the locally persisted session instead
+    // of forcing a network round-trip (unlike supabase.auth.getUser()),
+    // so this resolves offline too — otherwise profileId would never
+    // get set offline and every query below it would simply never run.
+    getCurrentUserId().then((id) => {
+      if (id) setProfileId(id);
     });
   }, []);
 
@@ -127,10 +132,14 @@ export default function LedgerHome() {
   }
 
   async function load() {
-    const { data: counterparties, error: cpErr } = await supabase
-      .from("counterparties")
-      .select("id, name, phone_number, whatsapp_number, address")
-      .eq("owner_profile_id", profileId);
+    const { data: counterparties, error: cpErr } = await cachedQuery(
+      `ledger:counterparties:${profileId}`,
+      () =>
+        supabase
+          .from("counterparties")
+          .select("id, name, phone_number, whatsapp_number, address")
+          .eq("owner_profile_id", profileId)
+    );
 
     if (cpErr) {
       console.error("failed to load counterparties:", cpErr);
@@ -140,11 +149,15 @@ export default function LedgerHome() {
       return;
     }
 
-    const { data: entries, error: entriesErr } = await supabase
-      .from("ledger_entries")
-      .select("id, client_id, counterparty_id, entry_type, amount, note, entry_date, currency")
-      .eq("profile_id", profileId)
-      .order("entry_date", { ascending: false });
+    const { data: entries, error: entriesErr } = await cachedQuery(
+      `ledger:entries:${profileId}`,
+      () =>
+        supabase
+          .from("ledger_entries")
+          .select("id, client_id, counterparty_id, entry_type, amount, note, entry_date, currency")
+          .eq("profile_id", profileId)
+          .order("entry_date", { ascending: false })
+    );
 
     if (entriesErr) {
       console.error("failed to load ledger_entries:", entriesErr);

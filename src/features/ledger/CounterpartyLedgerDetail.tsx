@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { phoneToSyntheticEmail } from "../../lib/authHelpers";
@@ -95,8 +96,8 @@ export default function CounterpartyLedgerDetail() {
   const [showAccountReceipt, setShowAccountReceipt] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setProfileId(data.user.id);
+    getCurrentUserId().then((id) => {
+      if (id) setProfileId(id);
     });
   }, []);
 
@@ -108,11 +109,13 @@ export default function CounterpartyLedgerDetail() {
   }, [profileId, counterpartyId]);
 
   async function loadContact() {
-    const { data } = await supabase
-      .from("counterparties")
-      .select("name, phone_number, whatsapp_number, address")
-      .eq("id", counterpartyId)
-      .single();
+    const { data } = await cachedQuery<ContactProfile>(`ledger:contact:${counterpartyId}`, () =>
+      supabase
+        .from("counterparties")
+        .select("name, phone_number, whatsapp_number, address")
+        .eq("id", counterpartyId)
+        .single()
+    );
     if (data) {
       setContact(data);
       setEditName(data.name);
@@ -123,12 +126,16 @@ export default function CounterpartyLedgerDetail() {
   }
 
   async function loadEntries() {
-    const { data, error: loadErr } = await supabase
-      .from("ledger_entries")
-      .select("id, client_id, entry_type, amount, currency, note, entry_date")
-      .eq("profile_id", profileId)
-      .eq("counterparty_id", counterpartyId)
-      .order("entry_date", { ascending: false });
+    const { data, error: loadErr } = await cachedQuery(
+      `ledger:contact-entries:${profileId}:${counterpartyId}`,
+      () =>
+        supabase
+          .from("ledger_entries")
+          .select("id, client_id, entry_type, amount, currency, note, entry_date")
+          .eq("profile_id", profileId)
+          .eq("counterparty_id", counterpartyId)
+          .order("entry_date", { ascending: false })
+    );
 
     if (loadErr) {
       console.error("failed to load entries:", loadErr);

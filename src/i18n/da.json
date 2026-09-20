@@ -4,8 +4,8 @@
   "nav.prices": "قیمت‌ها",
   "nav.settings": "تنظیمات",
   "ledger.totalBalance": "بیلانس کل",
-  "ledger.given": "داده شده",
-  "ledger.received": "گرفته شده",
+  "ledger.given": "بردګي",
+  "ledger.received": "رسيد",
   "ledger.newEntry": "+ ثبت جدید",
   "ledger.synced": "همگام شد",
   "ledger.pending": "در انتظار همگام‌سازی",
@@ -187,5 +187,6 @@
   "ledger.settleWarningBothCurrencies": "این شامل ثبت‌های AFN و PKR هر دو می‌شود.",
   "ledger.viewBoth": "هردو",
   "receipt.generating": "تصویر در حال ساخت است…",
-  "receipt.generateFailed": "تصویر ساخته نشد — دوباره تلاش کنید."
+  "receipt.generateFailed": "تصویر ساخته نشد — دوباره تلاش کنید.",
+  "inventory.selectTransactionType": "نوع معامله را انتخاب کنید"
 }

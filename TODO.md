@@ -353,3 +353,33 @@ see section 1 and 2.**
 - [ ] Test offline: force airplane mode with an existing session already saved, reopen the PWA — should reach the app shell instead of hanging on the loading screen.
 - [ ] Test a receipt Download and a WhatsApp share on both a desktop browser (should fall back to the wa.me text link) and a phone (should offer the actual image via the share sheet where supported).
 - [ ] Test logging in with a phone number typed differently than it was during registration (with/without `+93`, with/without leading `0`) — should now succeed either way.
+
+---
+
+## 23. Bug-fix round — totals, averaging, transaction-type defaults, offline data loading
+
+### 1 & 7. Transport/porter fees not included in the transaction total
+- [x] Found in the per-transaction list row: the "Total" line was `quantity × unit_cost`, dropping `transport_cost`/`porter_fee` entirely (the receipt's total already included them from the previous round — this was the other total, shown inline in the transaction list itself). Now `quantity × unit_cost + transport_cost + porter_fee`.
+
+### 2, 3 & 4. Wrong average cost for manually-added commodities / first-entry type / no default selection
+- [x] Root cause: the avg-cost trigger (`013_inventory_transaction_edit.sql`) only folds cost into `avg_cost_per_unit` on a `'purchase'` row — a `sale`/`adjustment` only changes quantity. If a brand-new commodity's *first-ever* transaction isn't a purchase (easy to do, since the type dropdown defaulted to "purchase" but was freely changeable), those units get averaged in at zero cost and permanently skew the average for every purchase after it.
+- [x] Fixed at the UI level (as asked): a commodity with no transaction history at all now only offers "Purchase" — the other two options aren't rendered. Any commodity that already has history now opens its Add Transaction form with the type left **unselected** (a disabled placeholder option), so a type must always be chosen deliberately rather than trusting a default. Submitting without choosing one now shows a validation message instead of silently defaulting.
+- [x] Also resets every add-transaction field (not just the type) when switching which item's form is open, so a stale value from a previous item's form can no longer leak into a different item's entry by accident.
+- [x] Not done: no retroactive fix for existing commodities whose average is already skewed from a bad first entry — that needs a decision on how to treat the historical data (zero it out? backfill a synthetic purchase?) rather than a code change.
+
+### 5. Given/Received in Pashto & Dari
+- [x] `ledger.given` → "بردګي", `ledger.received` → "رسيد" in both `ps.json` and `da.json`.
+
+### 6. Offline: past the loading screen, but nothing loads (placeholder UI only)
+- [x] Two stacked causes, both fixed:
+  - Every screen's initial data load called `supabase.auth.getUser()` just to get the profile id — `getUser()` always forces a network round-trip to revalidate the token server-side (unlike `getSession()`), so offline it never resolved and `profileId` stayed `null` forever, meaning every query gated on it never even ran. New `lib/authSession.ts` (`getOfflineSafeSession()` / `getCurrentUserId()`, sharing the same timeout+cached-session-fallback logic `useAuth.ts` already used) replaces `getUser()` everywhere it was only used for reads: `LedgerHome`, `CounterpartyLedgerDetail`, `InventoryHome`, `shopProfile.ts`, `SubscriptionScreen`. Left untouched in the genuine write/re-auth flows (`ChangePasswordScreen`, `ShopProfileScreen`'s save, the Settle Account re-auth) — those should keep requiring a live connection.
+  - Even with profileId resolved, the actual list queries (`counterparties`, `ledger_entries`, `inventory_items`, `inventory_transactions`, `commodities`, `profiles`) still fail outright offline, and the existing error handling just set the list to `[]` — indistinguishable from "you have no data yet." New `cachedQuery()` in `offlineQueue.ts` (bumped the IndexedDB schema to add a `readCache` store) wraps every one of those load queries: a successful fetch is remembered locally, keyed by table + profile/commodity id; a failed one now serves the last-remembered result instead of an empty list.
+- [x] Not done: this covers every screen's primary list-load queries but not literally every read in the app (e.g. a couple of on-demand lookups inside action handlers) — those still require a live connection when first exercised offline, same as before.
+
+---
+
+## To run before deploying this round
+- [ ] No migrations or Edge Function changes this round — app code only.
+- [ ] Test: create a brand-new commodity, confirm its Add Transaction form only offers "Purchase" until a first transaction exists, then confirm a normal item's form opens with no type pre-selected.
+- [ ] Test: a purchase with both transport cost and porter fee set — confirm the transaction list's "Total" line includes both.
+- [ ] Test offline: with a session already saved, force airplane mode, reopen a Ledger contact / Inventory / Prices screen that was previously loaded online at least once — should show the last-synced data instead of empty lists.

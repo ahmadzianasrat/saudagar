@@ -187,5 +187,6 @@
   "ledger.settleWarningBothCurrencies": "This includes both AFN and PKR entries.",
   "ledger.viewBoth": "Both",
   "receipt.generating": "Rendering image…",
-  "receipt.generateFailed": "Couldn't generate the image — please try again."
+  "receipt.generateFailed": "Couldn't generate the image — please try again.",
+  "inventory.selectTransactionType": "Select transaction type"
 }

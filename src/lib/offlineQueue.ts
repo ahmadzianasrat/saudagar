@@ -39,20 +39,82 @@ interface SaudagarDB extends DBSchema {
     value: QueueItem;
     indexes: { "by-synced": number }; // 0 = pending, 1 = synced, for quick filtering
   };
+  readCache: {
+    key: string;
+    value: { key: string; data: unknown; updatedAt: number };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<SaudagarDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<SaudagarDB>("saudagar-offline", 1, {
-      upgrade(db) {
-        const store = db.createObjectStore("writeQueue", { keyPath: "id" });
-        store.createIndex("by-synced", "syncedFlag");
+    dbPromise = openDB<SaudagarDB>("saudagar-offline", 2, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const store = db.createObjectStore("writeQueue", { keyPath: "id" });
+          store.createIndex("by-synced", "syncedFlag");
+        }
+        if (oldVersion < 2) {
+          db.createObjectStore("readCache", { keyPath: "key" });
+        }
       },
     });
   }
   return dbPromise;
+}
+
+// ============================================================
+// Read-through cache for GET queries.
+// ------------------------------------------------------------
+// The write queue above is only half of "works offline" — it covers
+// writes, but every screen's initial data load was a plain Supabase
+// query with no fallback, so opening the app offline (even after the
+// auth/loading-screen fix) showed only empty-state placeholders: the
+// query fails, the error handler sets the list to [], and that looks
+// identical to "you have no data" even though the real data is just
+// unreachable right now.
+//
+// cachedQuery() wraps a query: on success it remembers the result
+// (keyed by table + whatever scopes it, e.g. the profile id) for next
+// time; on failure it serves the last-remembered result instead of an
+// error, so the screen shows the data as of the last successful sync
+// rather than a false "empty." `fromCache` tells the caller whether
+// what it got back might be stale, in case it wants to show that.
+// ============================================================
+export async function cacheGet<T>(key: string): Promise<T | null> {
+  try {
+    const db = await getDB();
+    const row = await db.get("readCache", key);
+    return (row?.data as T) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheSet<T>(key: string, data: T): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put("readCache", { key, data, updatedAt: Date.now() });
+  } catch {
+    // best-effort — a failed cache write shouldn't break the screen
+  }
+}
+
+export async function cachedQuery<T>(
+  key: string,
+  run: () => PromiseLike<{ data: T | null; error: any }>
+): Promise<{ data: T | null; error: any; fromCache: boolean }> {
+  const { data, error } = await run();
+  if (!error) {
+    if (data !== null) await cacheSet(key, data);
+    return { data, error: null, fromCache: false };
+  }
+  const cached = await cacheGet<T>(key);
+  if (cached !== null) {
+    return { data: cached, error: null, fromCache: true };
+  }
+  return { data: null, error, fromCache: false };
 }
 
 // Call this whenever the user performs a ledger or inventory action.

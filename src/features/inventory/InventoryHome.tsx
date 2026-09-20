@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { enqueueWrite, getSyncStatus } from "../../lib/offlineQueue";
+import { enqueueWrite, getSyncStatus, cachedQuery } from "../../lib/offlineQueue";
+import { getCurrentUserId } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -152,7 +153,7 @@ export default function InventoryHome() {
   const [txCurrencyFilter, setTxCurrencyFilter] = useState<"both" | "AFN" | "PKR">("both");
 
   const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
-  const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment">("purchase");
+  const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment" | "">("");
   const [txQuantity, setTxQuantity] = useState("");
   const [txUnitCost, setTxUnitCost] = useState("");
   const [txTransportCost, setTxTransportCost] = useState("");
@@ -193,17 +194,19 @@ export default function InventoryHome() {
   const [editTxPorterFee, setEditTxPorterFee] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setProfileId(data.user.id);
+    getCurrentUserId().then((id) => {
+      if (id) setProfileId(id);
     });
-    supabase.from("commodities").select("id, name_en, unit").then(({ data, error: commErr }) => {
-      if (commErr) {
-        console.error("failed to load commodities:", commErr);
-        setError("Couldn't load commodities.");
-        return;
+    cachedQuery("inventory:commodities", () => supabase.from("commodities").select("id, name_en, unit")).then(
+      ({ data, error: commErr }) => {
+        if (commErr) {
+          console.error("failed to load commodities:", commErr);
+          setError("Couldn't load commodities.");
+          return;
+        }
+        setCommodities(data ?? []);
       }
-      setCommodities(data ?? []);
-    });
+    );
   }, []);
 
   useEffect(() => {
@@ -214,10 +217,12 @@ export default function InventoryHome() {
   }, [profileId]);
 
   async function loadItems() {
-    const { data: inv, error: invErr } = await supabase
-      .from("inventory_items")
-      .select("id, commodity_id, quantity, avg_cost_per_unit, total_cost, commodities(name_en, unit)")
-      .eq("profile_id", profileId);
+    const { data: inv, error: invErr } = await cachedQuery(`inventory:items:${profileId}`, () =>
+      supabase
+        .from("inventory_items")
+        .select("id, commodity_id, quantity, avg_cost_per_unit, total_cost, commodities(name_en, unit)")
+        .eq("profile_id", profileId)
+    );
 
     if (invErr) {
       console.error("failed to load inventory_items:", invErr);
@@ -228,13 +233,15 @@ export default function InventoryHome() {
 
     const withPrices = await Promise.all(
       (inv ?? []).map(async (row: any) => {
-        const { data: priceRow } = await supabase
-          .from("prices")
-          .select("price")
-          .eq("commodity_id", row.commodity_id)
-          .order("price_date", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: priceRow } = await cachedQuery<{ price: number }>(`inventory:today-price:${row.commodity_id}`, () =>
+          supabase
+            .from("prices")
+            .select("price")
+            .eq("commodity_id", row.commodity_id)
+            .order("price_date", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        );
         return {
           ...row,
           commodity_name: row.commodities?.name_en,
@@ -247,10 +254,12 @@ export default function InventoryHome() {
   }
 
   async function loadTransactions() {
-    const { data: itemRows } = await supabase
-      .from("inventory_items")
-      .select("id, commodities(name_en, unit)")
-      .eq("profile_id", profileId);
+    const { data: itemRows } = await cachedQuery(`inventory:item-meta:${profileId}`, () =>
+      supabase
+        .from("inventory_items")
+        .select("id, commodities(name_en, unit)")
+        .eq("profile_id", profileId)
+    );
 
     const itemMeta = new Map((itemRows ?? []).map((r: any) => [r.id, { name: r.commodities?.name_en, unit: r.commodities?.unit }]));
     const itemIds = (itemRows ?? []).map((r) => r.id);
@@ -259,11 +268,13 @@ export default function InventoryHome() {
       return;
     }
 
-    const { data: txRows, error: txErr } = await supabase
-      .from("inventory_transactions")
-      .select("id, client_id, inventory_item_id, transaction_type, quantity, unit_cost, transport_cost, porter_fee, party_name, party_phone, party_whatsapp, party_address, note, currency, fx_rate, created_at")
-      .in("inventory_item_id", itemIds)
-      .order("created_at", { ascending: false });
+    const { data: txRows, error: txErr } = await cachedQuery(`inventory:transactions:${profileId}`, () =>
+      supabase
+        .from("inventory_transactions")
+        .select("id, client_id, inventory_item_id, transaction_type, quantity, unit_cost, transport_cost, porter_fee, party_name, party_phone, party_whatsapp, party_address, note, currency, fx_rate, created_at")
+        .in("inventory_item_id", itemIds)
+        .order("created_at", { ascending: false })
+    );
 
     if (txErr) {
       console.error("failed to load inventory_transactions:", txErr);
@@ -286,6 +297,11 @@ export default function InventoryHome() {
   async function handleAddTransaction(itemId: string) {
     if (!profileId || !txQuantity) return;
     setError(null);
+
+    if (!txType) {
+      setError(tr("inventory.selectTransactionType"));
+      return;
+    }
 
     if ((txType === "purchase" || txType === "sale") && !txUnitCost) {
       setError(tr("inventory.priceRequired"));
@@ -580,7 +596,34 @@ export default function InventoryHome() {
             )}
 
             <button
-              onClick={() => setShowAddTransaction(showAddTransaction === item.id ? null : item.id)}
+              onClick={() => {
+                const opening = showAddTransaction !== item.id;
+                setShowAddTransaction(opening ? item.id : null);
+                if (opening) {
+                  // Fresh form per item — a stale selection carried
+                  // over from a previous item's form is exactly the
+                  // kind of "picked the wrong type by accident" this
+                  // is meant to prevent. A commodity with no recorded
+                  // transactions yet can only sensibly start with a
+                  // purchase (there's nothing to sell or adjust), so
+                  // that case is pre-selected; otherwise the type is
+                  // left blank and must be chosen explicitly.
+                  const hasHistory = (allTransactions ?? []).some((t) => t.inventory_item_id === item.id);
+                  setTxType(hasHistory ? "" : "purchase");
+                  setTxQuantity("");
+                  setTxUnitCost("");
+                  setTxTransportCost("");
+                  setTxPorterFee("");
+                  setTxCurrency("AFN");
+                  setTxPartyName("");
+                  setTxPartyPhone("");
+                  setTxPartyWhatsapp("");
+                  setTxPartyAddress("");
+                  setTxAdjustmentAmount("");
+                  setTxAdjustmentComment("");
+                  setError(null);
+                }
+              }}
               style={{ ...secondaryButtonStyle, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
             >
               <PlusIcon size={16} />
@@ -590,9 +633,16 @@ export default function InventoryHome() {
             {showAddTransaction === item.id && (
               <div style={{ marginTop: 10, display: "grid", gap: 8, paddingTop: 10, borderTop: `1px solid ${colors.border}` }}>
                 <select value={txType} onChange={(e) => setTxType(e.target.value as any)} style={inputStyle}>
-                  <option value="purchase">{tr("inventory.purchase")}</option>
-                  <option value="sale">{tr("inventory.sale")}</option>
-                  <option value="adjustment">{tr("inventory.adjustment")}</option>
+                  {(allTransactions ?? []).some((t) => t.inventory_item_id === item.id) ? (
+                    <>
+                      <option value="" disabled>{tr("inventory.selectTransactionType")}</option>
+                      <option value="purchase">{tr("inventory.purchase")}</option>
+                      <option value="sale">{tr("inventory.sale")}</option>
+                      <option value="adjustment">{tr("inventory.adjustment")}</option>
+                    </>
+                  ) : (
+                    <option value="purchase">{tr("inventory.purchase")}</option>
+                  )}
                 </select>
                 <input placeholder={tr("inventory.quantity")} type="number" value={txQuantity} onChange={(e) => setTxQuantity(e.target.value)} style={inputStyle} />
                 {txType === "adjustment" && (
@@ -808,7 +858,7 @@ export default function InventoryHome() {
                               </div>
                             )}
                             <div style={{ fontSize: 11, color: colors.textFaint }}>
-                              {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost)}
+                              {tr("inventory.totalAmount")}: {formatNumber(Math.abs(tx.quantity) * tx.unit_cost + tx.transport_cost + tx.porter_fee)}
                             </div>
                           </>
                         )}
