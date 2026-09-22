@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
-import { getCurrentUserId } from "../../lib/authSession";
+import { getShopContext } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -80,6 +80,7 @@ export default function LedgerHome() {
   const [newAddress, setNewAddress] = useState("");
 
   const [showQuickEntry, setShowQuickEntry] = useState(false);
+  const [submittingQuickEntry, setSubmittingQuickEntry] = useState(false);
   const [quickContactId, setQuickContactId] = useState("");
   const [quickType, setQuickType] = useState<"credit" | "debit">("credit");
   const [quickAmount, setQuickAmount] = useState("");
@@ -90,12 +91,13 @@ export default function LedgerHome() {
   const [quickNote, setQuickNote] = useState("");
 
   useEffect(() => {
-    // getCurrentUserId() reads the locally persisted session instead
-    // of forcing a network round-trip (unlike supabase.auth.getUser()),
-    // so this resolves offline too — otherwise profileId would never
-    // get set offline and every query below it would simply never run.
-    getCurrentUserId().then((id) => {
-      if (id) setProfileId(id);
+    // getShopContext() resolves the SHOP's data-scope id — the
+    // owner's own id, or (for a secretary login) their employer's id
+    // — and reads the locally persisted session instead of forcing a
+    // network round-trip, so this still resolves offline. See
+    // lib/authSession.ts.
+    getShopContext().then(({ shopProfileId }) => {
+      if (shopProfileId) setProfileId(shopProfileId);
     });
   }, []);
 
@@ -274,63 +276,70 @@ export default function LedgerHome() {
       setError(tr("ledger.selectCurrencyRequired"));
       return;
     }
+    if (submittingQuickEntry) return;
+    setSubmittingQuickEntry(true);
     setError(null);
 
-    const clientId = generateClientId();
-    await enqueueWrite("ledger_entries", clientId, {
-      client_id: clientId,
-      profile_id: profileId,
-      counterparty_id: quickContactId,
-      entry_type: quickType,
-      amount: Number(quickAmount),
-      currency: quickCurrency,
-      note: quickNote || null,
-      entry_date: new Date().toISOString(),
-    });
-
-    // enqueueWrite now awaits the actual sync attempt — re-check
-    // status immediately rather than hardcoding "pending", fixing the
-    // "only synced after refresh" symptom.
-    const syncStatus = await getSyncStatus(clientId);
-
-    const contactName = (contacts ?? []).find((c) => c.id === quickContactId)?.name;
-    const delta = quickType === "credit" ? Number(quickAmount) : -Number(quickAmount);
-    setContacts((prev) =>
-      (prev ?? []).map((c) =>
-        c.id === quickContactId
-          ? {
-              ...c,
-              balanceAFN: c.balanceAFN + (quickCurrency === "AFN" ? delta : 0),
-              balancePKR: c.balancePKR + (quickCurrency === "PKR" ? delta : 0),
-              lastActivity: new Date().toISOString(),
-            }
-          : c
-      )
-    );
-    setAllEntries((prev) => [
-      // prepend: prev is guaranteed non-null here since this only runs
-      // after the initial load has completed (the form isn't shown until then)
-      {
-        id: clientId,
+    try {
+      const clientId = generateClientId();
+      await enqueueWrite("ledger_entries", clientId, {
         client_id: clientId,
+        profile_id: profileId,
         counterparty_id: quickContactId,
-        counterparty_name: contactName,
-        currency: quickCurrency,
         entry_type: quickType,
         amount: Number(quickAmount),
-        note: quickNote,
+        currency: quickCurrency,
+        note: quickNote || null,
         entry_date: new Date().toISOString(),
-        syncStatus,
-      },
-      ...(prev ?? []),
-    ]);
+      });
 
-    setQuickAmount("");
-    setQuickCurrency("");
-    setQuickNote("");
-    setQuickContactId("");
-    setEntriesPage(1);
-    setShowQuickEntry(false);
+      // enqueueWrite resolves as soon as the entry is saved locally
+      // (it no longer waits on the network — see offlineQueue.ts), so
+      // this reads back "pending" immediately and flips to "synced"
+      // shortly after via the SAUDAGAR_SYNCED_EVENT listener.
+      const syncStatus = await getSyncStatus(clientId);
+
+      const contactName = (contacts ?? []).find((c) => c.id === quickContactId)?.name;
+      const delta = quickType === "credit" ? Number(quickAmount) : -Number(quickAmount);
+      setContacts((prev) =>
+        (prev ?? []).map((c) =>
+          c.id === quickContactId
+            ? {
+                ...c,
+                balanceAFN: c.balanceAFN + (quickCurrency === "AFN" ? delta : 0),
+                balancePKR: c.balancePKR + (quickCurrency === "PKR" ? delta : 0),
+                lastActivity: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+      setAllEntries((prev) => [
+        // prepend: prev is guaranteed non-null here since this only runs
+        // after the initial load has completed (the form isn't shown until then)
+        {
+          id: clientId,
+          client_id: clientId,
+          counterparty_id: quickContactId,
+          counterparty_name: contactName,
+          currency: quickCurrency,
+          entry_type: quickType,
+          amount: Number(quickAmount),
+          note: quickNote,
+          entry_date: new Date().toISOString(),
+          syncStatus,
+        },
+        ...(prev ?? []),
+      ]);
+
+      setQuickAmount("");
+      setQuickCurrency("");
+      setQuickNote("");
+      setQuickContactId("");
+      setEntriesPage(1);
+      setShowQuickEntry(false);
+    } finally {
+      setSubmittingQuickEntry(false);
+    }
   }
 
   const pagedEntries = (allEntries ?? []).slice((entriesPage - 1) * PAGE_SIZE, entriesPage * PAGE_SIZE);
@@ -471,7 +480,9 @@ export default function LedgerHome() {
               <option value="PKR">{currencyLabel("PKR")}</option>
             </select>
             <input placeholder={tr("ledger.note")} value={quickNote} onChange={(e) => setQuickNote(e.target.value)} style={inputStyle} />
-            <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
+            <button type="submit" disabled={submittingQuickEntry} style={{ ...primaryButtonStyle, opacity: submittingQuickEntry ? 0.65 : 1 }}>
+              {submittingQuickEntry ? tr("common.saving") : tr("ledger.save")}
+            </button>
           </form>
         </Card>
       )}

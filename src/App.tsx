@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
 import RenewalBanner from "./components/RenewalBanner";
@@ -12,8 +12,12 @@ import LoginScreen from "./features/auth/LoginScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import ChangePasswordScreen from "./features/settings/ChangePasswordScreen";
 import ShopProfileScreen from "./features/settings/ShopProfileScreen";
+import ManageSecretariesScreen from "./features/settings/ManageSecretariesScreen";
 import CurrencyConverterScreen from "./features/tools/CurrencyConverterScreen";
+import LegalScreen from "./features/legal/LegalScreen";
+import ReportsScreen from "./features/reports/ReportsScreen";
 import { useAuth } from "./lib/useAuth";
+import { getShopContext } from "./lib/authSession";
 import { useSubscriptionStatus } from "./lib/useSubscriptionStatus";
 import { useTranslation } from "./i18n/useTranslation";
 import { colors } from "./theme";
@@ -22,7 +26,18 @@ import { WalletIcon } from "./components/icons";
 export default function App() {
   const { session, isAuthenticated, loading } = useAuth();
   const [showRequestAccess, setShowRequestAccess] = useState(false);
-  const subscriptionStatus = useSubscriptionStatus(session?.user.id);
+  // The shop's own profile id, not necessarily session.user.id — a
+  // secretary login (see migrations/020_shop_secretaries.sql) has a
+  // different auth id than the shop's subscription is filed under.
+  const [shopProfileId, setShopProfileId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setShopProfileId(undefined);
+      return;
+    }
+    getShopContext().then(({ shopProfileId }) => setShopProfileId(shopProfileId ?? undefined));
+  }, [isAuthenticated, session?.user.id]);
+  const subscriptionStatus = useSubscriptionStatus(shopProfileId);
   const { tr } = useTranslation();
 
   if (loading) {
@@ -70,7 +85,10 @@ export default function App() {
           <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/settings/change-password" element={<ChangePasswordScreen />} />
           <Route path="/settings/shop-profile" element={<ShopProfileScreen />} />
+          <Route path="/settings/secretaries" element={<ManageSecretariesScreen />} />
           <Route path="/tools/currency-converter" element={<CurrencyConverterScreen />} />
+          <Route path="/legal/:doc" element={<LegalScreen />} />
+          <Route path="/reports" element={<ReportsScreen />} />
         </Routes>
       </div>
       <BottomNav />

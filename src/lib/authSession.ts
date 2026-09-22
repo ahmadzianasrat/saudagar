@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase, SUPABASE_URL } from "./supabaseClient";
+import { cachedQuery } from "./offlineQueue";
 
 // ============================================================
 // Offline-safe session/user access.
@@ -77,4 +78,57 @@ export async function getOfflineSafeSession(): Promise<Session | null> {
 export async function getCurrentUserId(): Promise<string | null> {
   const session = await getOfflineSafeSession();
   return session?.user.id ?? null;
+}
+
+// ============================================================
+// Shop context — resolves "whose data should this login see" for
+// BOTH an owner and a secretary (see migrations/020_shop_secretaries.sql).
+// ------------------------------------------------------------
+// An owner's own auth id IS the shop's profile_id everywhere in the
+// schema, so historically every screen just used getCurrentUserId()
+// directly as `profileId`. A secretary's auth id is different from
+// the shop's profile_id — this resolves which one to actually use,
+// so the rest of the app can keep working with a single `profileId`
+// concept unchanged, while gaining role information for screens that
+// need to hide/disable owner-only actions (RLS is what actually
+// enforces the restriction — see the migration — this is only for
+// the UI to not show a button that would just fail).
+// ============================================================
+export type ShopRole = "owner" | "secretary" | null;
+
+export interface ShopContext {
+  shopProfileId: string | null;
+  role: ShopRole;
+  secretaryName: string | null;
+}
+
+const NO_SHOP_CONTEXT: ShopContext = { shopProfileId: null, role: null, secretaryName: null };
+
+export async function getShopContext(): Promise<ShopContext> {
+  const userId = await getCurrentUserId();
+  if (!userId) return NO_SHOP_CONTEXT;
+
+  // Cheap, single-row lookup — most logins are owners, so this
+  // resolves in one query for the common case.
+  const { data: ownerRow } = await cachedQuery<{ id: string }>(`shop:owner-check:${userId}`, () =>
+    supabase.from("profiles").select("id").eq("id", userId).maybeSingle()
+  );
+  if (ownerRow) {
+    return { shopProfileId: ownerRow.id, role: "owner", secretaryName: null };
+  }
+
+  const { data: secRow } = await cachedQuery<{ owner_profile_id: string; name: string; status: string }>(
+    `shop:secretary-check:${userId}`,
+    () =>
+      supabase
+        .from("shop_secretaries")
+        .select("owner_profile_id, name, status")
+        .eq("secretary_user_id", userId)
+        .maybeSingle()
+  );
+  if (secRow && secRow.status === "active") {
+    return { shopProfileId: secRow.owner_profile_id, role: "secretary", secretaryName: secRow.name };
+  }
+
+  return NO_SHOP_CONTEXT;
 }

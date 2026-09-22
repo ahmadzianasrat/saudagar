@@ -237,6 +237,33 @@ export function InfoIcon({ size = 22, color = "currentColor", style }: IconProps
   );
 }
 
+export function DocumentIcon({ size = 22, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M7 3.5h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+      <path d="M14 3.5v4h4" />
+      <path d="M8.5 12.5h7M8.5 15.5h7M8.5 9.5h3" />
+    </svg>
+  );
+}
+
+export function ShieldIcon({ size = 22, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M12 3.5 5 6.2v5.3c0 4.8 3 8 7 9 4-1 7-4.2 7-9V6.2L12 3.5Z" />
+      <path d="M9 12l2 2 4-4.2" />
+    </svg>
+  );
+}
+
+export function ChartIcon({ size = 22, color = "currentColor", style }: IconProps) {
+  return (
+    <svg {...base(size)} stroke={color} style={style}>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </svg>
+  );
+}
+
 export function LogOutIcon({ size = 22, color = "currentColor", style }: IconProps) {
   return (
     <svg {...base(size)} stroke={color} style={style}>

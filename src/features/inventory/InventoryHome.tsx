@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
-import { getCurrentUserId } from "../../lib/authSession";
+import { getShopContext } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -173,6 +173,10 @@ export default function InventoryHome() {
   const { formatNumber, dateSystem, digitStyle, currencyLabel } = useLanguage();
   const { tr } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
+  // Only an owner login can edit an existing transaction — RLS
+  // enforces this regardless (see migrations/020_shop_secretaries.sql),
+  // this just keeps a secretary from seeing a button that would fail.
+  const [isOwner, setIsOwner] = useState(true);
   // `null` = not loaded yet, distinct from `[]` = loaded and empty —
   // avoids flashing the empty-state message before real data arrives.
   const [items, setItems] = useState<InventoryItem[] | null>(null);
@@ -182,6 +186,7 @@ export default function InventoryHome() {
   const [txCurrencyFilter, setTxCurrencyFilter] = useState<"both" | "AFN" | "PKR">("both");
 
   const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
+  const [submittingTx, setSubmittingTx] = useState(false);
   const [txType, setTxType] = useState<"purchase" | "sale" | "adjustment" | "">("");
   const [txQuantity, setTxQuantity] = useState("");
   const [txUnitCost, setTxUnitCost] = useState("");
@@ -223,8 +228,9 @@ export default function InventoryHome() {
   const [editTxPorterFee, setEditTxPorterFee] = useState("");
 
   useEffect(() => {
-    getCurrentUserId().then((id) => {
-      if (id) setProfileId(id);
+    getShopContext().then(({ shopProfileId, role }) => {
+      if (shopProfileId) setProfileId(shopProfileId);
+      setIsOwner(role === "owner");
     });
     cachedQuery("inventory:commodities", () => supabase.from("commodities").select("id, name_en, unit")).then(
       ({ data, error: commErr }) => {
@@ -354,7 +360,13 @@ export default function InventoryHome() {
       return;
     }
 
-    const clientId = generateClientId();
+    // Guards against duplicate transactions from a fast double-tap or
+    // a slow connection — without this, each tap queued its own write.
+    if (submittingTx) return;
+    setSubmittingTx(true);
+
+    try {
+      const clientId = generateClientId();
     // FIX: adjustments now accept a signed value directly (e.g. -5 to
     // decrease stock for spoilage/loss, 5 to increase after a recount)
     // — previously this always forced a positive value, making a
@@ -508,6 +520,9 @@ export default function InventoryHome() {
     setTxPartyAddress("");
     setTxPage(1);
     setShowAddTransaction(null);
+    } finally {
+      setSubmittingTx(false);
+    }
   }
 
   function startEditTx(tx: TransactionRow) {
@@ -785,7 +800,9 @@ export default function InventoryHome() {
                     />
                   </>
                 )}
-                <button onClick={() => handleAddTransaction(item.id)} style={primaryButtonStyle}>{tr("inventory.save")}</button>
+                <button onClick={() => handleAddTransaction(item.id)} disabled={submittingTx} style={{ ...primaryButtonStyle, opacity: submittingTx ? 0.65 : 1 }}>
+                  {submittingTx ? tr("common.saving") : tr("inventory.save")}
+                </button>
               </div>
             )}
           </Card>
@@ -952,12 +969,14 @@ export default function InventoryHome() {
                             <EyeIcon size={13} />
                           </button>
                         )}
-                        <button
-                          onClick={() => startEditTx(tx)}
-                          style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                        >
-                          <PencilIcon size={13} />
-                        </button>
+                        {isOwner && (
+                          <button
+                            onClick={() => startEditTx(tx)}
+                            style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                          >
+                            <PencilIcon size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

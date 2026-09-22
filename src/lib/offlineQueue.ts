@@ -148,15 +148,27 @@ export async function cachedQuery<T>(
 }
 
 // Call this whenever the user performs a ledger or inventory action.
-// It writes locally immediately (so the UI can update instantly and
-// offline), then attempts to sync immediately — AWAITED, not
-// fire-and-forget. Previously this was `void flushQueue()`, which
-// meant the caller had no way to know when the sync attempt actually
-// finished, so the UI's "pending" indicator never updated to "synced"
-// until a full page reload re-checked every item from scratch. This
-// is the fix for "only synced after a refresh" — callers can now
-// await enqueueWrite and immediately re-check getSyncStatus for the
-// entry they just wrote.
+// Writes locally to IndexedDB FIRST and resolves as soon as that
+// local write lands — the caller (and its optimistic UI update) is
+// never blocked on the network. A sync attempt is still kicked off
+// immediately (fire-and-forget), and getSyncStatus()/SAUDAGAR_SYNCED_EVENT
+// (see flushQueue below) are how a caller finds out once it actually
+// lands, without needing to await it here.
+//
+// This was briefly `await flushQueue()` — awaiting the sync attempt
+// so the caller could re-check getSyncStatus() and show "Synced"
+// immediately when actually online, without a page reload. But
+// flushQueue()'s network call had no timeout (postgrest-js's fetch()
+// has none built in, same underlying issue as every other
+// hangs-offline bug in this app), and awaiting it here meant that
+// hang blocked the optimistic UI update that comes after this call in
+// every caller — so on a flaky/fake-connected network (navigator.onLine
+// still true, e.g. Wi-Fi with no real internet) the Save button
+// looked completely unresponsive, and repeated taps queued repeated
+// duplicate entries that only appeared once a real connection let one
+// of the piled-up flush attempts finally resolve. SAUDAGAR_SYNCED_EVENT
+// now covers the original "update without a reload" goal without
+// blocking anything.
 export async function enqueueWrite(
   table: QueueItem["table"],
   clientId: string,
@@ -171,10 +183,17 @@ export async function enqueueWrite(
     synced: false,
   });
 
-  await flushQueue();
+  void flushQueue();
 }
 
 export const SAUDAGAR_SYNCED_EVENT = "saudagar:synced";
+
+// How long a single item's sync attempt gets before flushQueue moves
+// on and leaves it pending for the next trigger (online event / the
+// interval below / the next write) to retry. Keeps one stuck item
+// from holding up the rest of the queue, or the calling await in the
+// (rare, deliberate) places that still await flushQueue() directly.
+const FLUSH_ITEM_TIMEOUT_MS = 8000;
 
 // Attempts to push every unsynced item to Supabase. Safe to call
 // repeatedly/concurrently — items already synced are skipped, and
@@ -191,9 +210,21 @@ export async function flushQueue(): Promise<void> {
 
   for (const item of pending) {
     try {
-      const { error } = await supabase.from(item.table).upsert(item.payload, {
-        onConflict: item.table === "ledger_entries" ? "profile_id,client_id" : "inventory_item_id,client_id",
-      });
+      const upsertPromise = supabase
+        .from(item.table)
+        .upsert(item.payload, {
+          onConflict: item.table === "ledger_entries" ? "profile_id,client_id" : "inventory_item_id,client_id",
+        })
+        .then(
+          (res) => res,
+          (err) => ({ error: err })
+        );
+      const { error } = await Promise.race([
+        upsertPromise,
+        new Promise<{ error: any }>((resolve) =>
+          setTimeout(() => resolve({ error: { message: "flushQueue: timed out" } }), FLUSH_ITEM_TIMEOUT_MS)
+        ),
+      ]);
 
       if (error) {
         item.lastError = error.message;
@@ -206,7 +237,8 @@ export async function flushQueue(): Promise<void> {
       await db.put("writeQueue", item);
       anySynced = true;
     } catch (err) {
-      // Network error mid-flight — leave pending, next trigger will retry.
+      // Shouldn't happen (errors are caught above into `error`), but
+      // leave pending and move on rather than let the whole loop die.
       item.lastError = err instanceof Error ? err.message : String(err);
       await db.put("writeQueue", item);
     }

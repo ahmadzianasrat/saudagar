@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { getCurrentUserId } from "./authSession";
+import { getShopContext } from "./authSession";
 import { cachedQuery } from "./offlineQueue";
 
 export interface ShopProfile {
@@ -11,18 +11,20 @@ export interface ShopProfile {
 }
 
 export async function fetchShopProfile(): Promise<ShopProfile | null> {
-  // getCurrentUserId() (not supabase.auth.getUser()) so this — used
-  // for the header on every screen and for receipts — still works
-  // offline instead of silently failing before the query below even
-  // runs. See lib/authSession.ts.
-  const userId = await getCurrentUserId();
-  if (!userId) return null;
+  // getShopContext() resolves the SHOP's profile id — the owner's own
+  // id if this login is the owner, or their employer's id if it's a
+  // secretary — so a secretary sees the same shop header/receipt
+  // details the owner does. It's also offline-safe (see
+  // lib/authSession.ts) instead of silently failing before the query
+  // below even runs.
+  const { shopProfileId } = await getShopContext();
+  if (!shopProfileId) return null;
 
-  const { data, error } = await cachedQuery(`profile:shop:${userId}`, () =>
+  const { data, error } = await cachedQuery(`profile:shop:${shopProfileId}`, () =>
     supabase
       .from("profiles")
       .select("owner_name, shop_name, phone_number, whatsapp_number, address")
-      .eq("id", userId)
+      .eq("id", shopProfileId)
       .single()
   );
 

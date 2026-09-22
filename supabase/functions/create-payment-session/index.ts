@@ -73,7 +73,27 @@ serve(async (req) => {
     if (userErr || !userData?.user) {
       return jsonResponse({ error: "unauthorized" }, 401);
     }
-    const profileId = userData.user.id;
+
+    // Resolve the SHOP's profile id, not just the caller's own auth
+    // id — a secretary login (see migrations/020_shop_secretaries.sql)
+    // has no profiles row of its own, so a subscription they pay for
+    // needs to land on their employer's profile_id, not theirs.
+    let profileId: string | null = null;
+    const { data: ownerRow } = await supabase.from("profiles").select("id").eq("id", userData.user.id).maybeSingle();
+    if (ownerRow) {
+      profileId = ownerRow.id;
+    } else {
+      const { data: secRow } = await supabase
+        .from("shop_secretaries")
+        .select("owner_profile_id")
+        .eq("secretary_user_id", userData.user.id)
+        .eq("status", "active")
+        .maybeSingle();
+      profileId = secRow?.owner_profile_id ?? null;
+    }
+    if (!profileId) {
+      return jsonResponse({ error: "no_shop_profile" }, 403);
+    }
 
     const body = await req.json();
     const tier = body?.tier as string;

@@ -420,3 +420,83 @@ Reported with screenshots: reading now works offline (round 24 fixed that), but 
 - [ ] App code only.
 - [ ] Test: add a purchase to an existing item while offline — quantity/avg cost/total should update immediately on screen. Go back online and wait ~30s (or trigger a reload) — the same figures should very briefly recompute from the server and match exactly (no visible jump if the estimate was right, which it should be for a single offline transaction).
 - [ ] Test: a brand-new commodity with zero history should still only offer "Purchase" as the transaction type, even when that check is exercised offline.
+
+---
+
+## 26. Offline writes hung on flaky/fake-connected networks (root cause of round 25's own workaround) + a missed i18n key + Settle Account clarified
+
+### 1. Save button unresponsive offline, duplicate entries, nothing shows until an online write happens
+- [x] **Root cause, finally found:** round 25 (and earlier) had `enqueueWrite()` `await flushQueue()` — awaiting the actual network sync attempt — so the UI's synced/pending indicator could update without a page reload. But `flushQueue()`'s `supabase.from(...).upsert(...)` call had no timeout (same missing-timeout pattern as every other hang in this app, just never caught here before), and it was awaited *before* every caller's optimistic UI update. On a genuinely-offline device this was masked by the `navigator.onLine` check short-circuiting `flushQueue()` — but on a *flaky or falsely-"connected"* one (Wi-Fi with no real internet, weak signal — `navigator.onLine` stays `true`), the upsert just hung, blocking the Save button indefinitely. Each repeated tap queued its own write (silently, since the IndexedDB part always worked) but never rendered, so entries only became visible once a real connection let the pile-up finally flush — exactly the reported behavior, and identical in both Ledger and Inventory since both go through the same `enqueueWrite`.
+- [x] Fixed: `enqueueWrite()` no longer awaits the sync attempt — it resolves as soon as the local IndexedDB write lands, and kicks off `flushQueue()` in the background. The "update without a reload" goal from round 25 is now handled entirely by the `saudagar:synced` event instead of blocking the caller.
+- [x] Also gave `flushQueue()`'s per-item upsert its own timeout (8s) so one stuck item can't hold up the rest of the queue or the periodic/online-triggered retry either.
+- [x] Belt-and-suspenders: added an explicit `submitting` guard + disabled state on all three Save buttons (ledger quick-entry, ledger contact-detail entry, inventory transaction) so a double-tap can never queue a duplicate regardless of network speed.
+
+### 2. "+ Add Entry" given/received toggle still showing the old wording
+- [x] Found the actual cause: the toggle uses separate `ledger.givenRadio`/`ledger.receivedRadio` keys, distinct from the `ledger.given`/`ledger.received` fixed in round 23 — missed because they're a different key pair, not the same string reused. Both now say بردګي/رسيد in Pashto and Dari, matching the summary card.
+
+### 3. Settle Account — how does it scope by currency?
+- [x] Clarified, not changed (no bug, just documenting the actual behavior since it wasn't obvious from the UI): Settle Account deletes **every** ledger entry for that contact, in **both** AFN and PKR, regardless of which currency filter (AFN/PKR/Both) is currently selected on screen — the filter is purely a display toggle and was never wired into the delete query. Flagging this because it could surprise someone who has the "AFN" filter selected and assumes Settle Account only touches what's currently showing. Worth a product decision on whether that's actually wanted, or whether it should respect the active filter — happy to make it filter-aware if that's the intent.
+
+---
+
+## To run before deploying this round
+- [ ] App code only.
+- [ ] Test offline (and, if reproducible, on Wi-Fi with no real internet — the flaky case, not just airplane mode): add several ledger entries and inventory transactions quickly. Confirm each appears immediately, Save never hangs, and no duplicates appear even after tapping fast.
+- [ ] Test the given/received wording in the "+ Add Entry" toggle specifically (not just the summary card) in Pashto and Dari.
+
+---
+
+## 27. Settle Account scoping, itemized WhatsApp statement, About/Terms/Privacy
+
+### 1. Settle Account now respects the AFN/PKR/Both filter
+- [x] Previously always deleted every entry for the contact in both currencies regardless of which filter was active. Now: "Both" behaves as before; "AFN" or "PKR" only deletes that currency's entries, leaving the other currency's balance untouched. The button and modal title now show the scope explicitly ("Settle Account (AFN)") when a single currency is selected, and the button only appears when there's something to settle in the currently filtered view.
+
+### 2 & 3. Weekly/monthly/annual reports, and data backup/audit trail for edit disputes
+- Not implemented this round — see the reply for a proposed design on both; both are substantial enough (new screens/tables) to want a go-ahead before building.
+
+### 4. WhatsApp account statement is now itemized, not just a totals line
+- [x] Rebuilt `whatsappText` for the account statement to match the requested format: a header line, then one line per entry in chronological order (`date — given/received: ±amount؋ (balance: running_total؋)`), then a current-balance footer and a confirmation line. Uses the app's already-established بردګي/رسيد wording (rather than the "پور"/"تادیه شوی" wording in the example) for consistency with the rest of the app, and the AFN/PKR symbol (؋/₨) inline per amount. Multi-currency contacts get one block per currency. New i18n keys: `receipt.summaryFor`, `receipt.remainingInline`, `receipt.currentBalance`, `receipt.pleaseConfirm`.
+
+### 5. About Us / Terms of Use / Privacy Policy
+- [x] Added as three new pages under a "Legal" section in Settings (`/legal/about`, `/legal/terms`, `/legal/privacy`), fully localized in English/Pashto/Dari. First-draft content, not legal-reviewed — Terms folds in the existing subscription/pricing terms from `content/policies/terms.*.md` (those files are otherwise unused/unwired into the app) plus general account/data/dispute language; Privacy covers what's collected, where it's stored (Supabase + on-device for offline), who can see it, and how to request changes. Flagged in code comments as needing real review before it carries legal weight — same caveat the existing `.md` drafts already had for their Dari/Pashto translations.
+- [ ] Not done: these pages are only reachable after logging in (Settings → Legal). The app doesn't currently route anything pre-login — `LoginScreen`/`RequestAccessScreen` are shown by a plain state check, not by react-router — so surfacing Terms/Privacy on the login screen itself would need a small routing change; flagged as a possible follow-up, not built this round.
+
+---
+
+## To run before deploying this round
+- [ ] App code only.
+- [ ] Test Settle Account with the AFN filter active on a contact that has both AFN and PKR entries — confirm only AFN entries are removed and PKR balance is unaffected.
+- [ ] Test the WhatsApp share on an account statement — confirm the shared text lists every entry with a running balance, not just the total.
+
+---
+
+## 28. Secretary logins (real permission enforcement) + Reports (ledger + inventory)
+
+### Secretary accounts
+- [x] New migration `020_shop_secretaries.sql`: `shop_secretaries` table linking a secretary's own auth login to the owner's `profiles.id`, plus `current_shop_profile_id()` — a SQL helper resolving "whose shop data should this login see" for both an owner and an active secretary.
+- [x] Every table's **read/insert** RLS policies (`ledger_entries`, `inventory_items`, `inventory_transactions`, `counterparties`, `commodities`, `profiles`, `subscriptions`, `manual_payment_requests`, payment-proofs storage) now allow owner-or-secretary. Every **update/delete** policy is untouched — they already keyed off `auth.uid() = profile_id`, which only the owner's own auth id ever satisfies, so edit/delete stays owner-only with zero risk of a mistake in the rewrite. **This is the actual enforcement mechanism** — Postgres rejects a secretary's edit/delete attempt regardless of what the app's UI does or doesn't show.
+- [x] Two new Edge Functions (need the service role key, so can't be plain client inserts): `secretary-create` (owner creates a login, gets a one-time temp password back to relay) and `secretary-reset-password` (owner resets one). Both verify the caller actually owns that secretary/is an owner first. Revoking is a plain `shop_secretaries.status` update — no need to separately disable the auth login, since `current_shop_profile_id()` stops resolving for a revoked secretary and every policy denies them from there.
+- [x] New `getShopContext()` in `lib/authSession.ts` — resolves `{ shopProfileId, role, secretaryName }`, offline-safe like everything else. Replaces the old `getCurrentUserId()`-as-`profileId` pattern everywhere that pattern assumed "my auth id IS the shop's data scope," which stops being true for a secretary: `LedgerHome`, `CounterpartyLedgerDetail`, `InventoryHome`, `shopProfile.ts`, `SubscriptionScreen`, `SettingsScreen`, `App.tsx` (subscription status / renewal banner), and the `create-payment-session` Edge Function (which had the identical bug — it stamped a payment session with the caller's own id rather than the shop's, which would have silently broken subscription payment for any secretary who tried to pay the bill).
+- [x] UI gating added on top of the RLS enforcement (belt-and-suspenders — the button shouldn't be visible if it would just fail): edit contact, edit ledger entry, Settle Account, edit inventory transaction, and the Shop Profile save button are all hidden/disabled for a secretary login. Settings shows a small "you're signed in as {name}, a secretary" notice and hides the "Secretaries" management entry point.
+- [x] New `ManageSecretariesScreen.tsx` (Settings → Secretaries, owner-only): add a secretary (name + phone → temp password shown once), see active/revoked status, reset a secretary's password, revoke/reactivate.
+- [x] Fixed along the way: `ChangePasswordScreen.tsx` assumed every login has a `profiles` row to read a phone number from for re-auth — a secretary doesn't, so this would have permanently locked a secretary out of ever changing their own password. Now falls back to their `shop_secretaries` row.
+- [ ] Not done / follow-ups worth knowing about:
+  - No permission granularity beyond binary owner/secretary (e.g. "can edit but not delete," "can edit only same-day entries") — this was scoped as real, simple prevention per the stated ask, not a full permission matrix. Straightforward to add later as more boolean columns on `shop_secretaries` plus matching RLS conditions if wanted.
+  - This migration has been carefully cross-checked against the existing schema (every dropped policy name verified to match exactly) but **has not been run against a live database** — recommend applying it to a staging/dev Supabase project first, same as any migration.
+  - A secretary's own name isn't shown anywhere in the audit trail sense (i.e. this round doesn't add "edited by X" history) — that's the separate audit-trail idea from the previous round's conversation, not built this round; real prevention was prioritized over visibility-after-the-fact per your choice.
+
+### Reports (ledger + inventory)
+- [x] New `/reports` screen, added as a 5th bottom-nav tab. Week/Month/Year toggle (calendar-aligned — Monday-start week, 1st-of-month, Jan 1 — not a rolling window). Ledger section: given/received/net per currency (AFN/PKR shown separately, whichever have activity), most-active contacts. Inventory section: purchase value/sale value/net (AFN-equivalent, matching the existing avg-cost basis), most-active commodities by quantity.
+- [x] Computed entirely client-side from the same cached ledger/inventory data every other screen already uses (via `cachedQuery`), so it works offline too and doesn't need any new backend aggregation.
+- [ ] Not done: no export (PDF/image/WhatsApp share) of a report — flagged as a natural next step if wanted, following the same pattern as the receipt image work from earlier rounds.
+
+---
+
+## To run before deploying this round
+- [ ] **Run migration `020_shop_secretaries.sql`** against the database (staging first, recommended) — this round doesn't work at all without it (every screen using `getShopContext()` needs `shop_secretaries` and `current_shop_profile_id()` to exist).
+- [ ] **Deploy 2 new Edge Functions**: `secretary-create`, `secretary-reset-password`.
+- [ ] **Redeploy 1 changed Edge Function**: `create-payment-session` (shop-profile-id resolution fix).
+- [ ] Test: create a secretary from Settings → Secretaries, log in as them (phone + temp password, same login screen), confirm they can add ledger entries and inventory transactions, and confirm edit/delete/Settle Account/Shop Profile save are all hidden for them AND rejected server-side if attempted directly.
+- [ ] Test: revoke a secretary, confirm their next login/request returns empty/denied everywhere.
+- [ ] Test: a secretary can change their own password from Settings.
+- [ ] Test the Reports screen's three periods against a shop with real ledger + inventory history, in both languages.

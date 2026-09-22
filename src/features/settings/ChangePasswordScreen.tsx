@@ -49,14 +49,28 @@ export default function ChangePasswordScreen() {
     // Read from profiles.phone_number, not auth.users.phone — the
     // latter is intentionally left unset at account creation (see
     // admin-approve-account), since login uses synthetic email +
-    // password only, not Supabase's own phone-auth field.
+    // password only, not Supabase's own phone-auth field. A
+    // secretary login (see migrations/020_shop_secretaries.sql) has
+    // no profiles row of their own, so fall back to their
+    // shop_secretaries row instead — this screen is "change MY OWN
+    // password," which both an owner and a secretary need to do
+    // independently of whose shop data they're working in.
     const { data: profile } = await supabase
       .from("profiles")
       .select("phone_number")
       .eq("id", userData.user.id)
-      .single();
+      .maybeSingle();
 
-    const phoneNumber = profile?.phone_number;
+    let phoneNumber = profile?.phone_number ?? null;
+    if (!phoneNumber) {
+      const { data: secretary } = await supabase
+        .from("shop_secretaries")
+        .select("phone_number")
+        .eq("secretary_user_id", userData.user.id)
+        .maybeSingle();
+      phoneNumber = secretary?.phone_number ?? null;
+    }
+
     if (!phoneNumber) {
       setError(tr("password.error"));
       setLoading(false);

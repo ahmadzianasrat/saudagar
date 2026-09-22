@@ -1,18 +1,24 @@
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage, type Language, type DigitStyle, type DateSystem } from "../../contexts/LanguageContext";
 import { useTranslation } from "../../i18n/useTranslation";
 import { supabase } from "../../lib/supabaseClient";
+import { getShopContext } from "../../lib/authSession";
 import { colors, radius, shadow } from "../../theme";
 import { Card, SectionLabel, SegmentedControl } from "../../components/ui";
 import {
   ChevronIcon,
   CrownIcon,
+  DocumentIcon,
   GlobeIcon,
+  InfoIcon,
   LockIcon,
   LogOutIcon,
+  ShieldIcon,
   StoreIcon,
   SwapIcon,
+  UsersIcon,
 } from "../../components/icons";
 
 const LANGUAGES: { code: Language; label: string }[] = [
@@ -30,6 +36,15 @@ export default function SettingsScreen() {
     useThousandSeparator, setUseThousandSeparator,
     dateSystem, setDateSystem,
   } = useLanguage();
+  const [isOwner, setIsOwner] = useState(true);
+  const [secretaryName, setSecretaryName] = useState<string | null>(null);
+
+  useEffect(() => {
+    getShopContext().then(({ role, secretaryName }) => {
+      setIsOwner(role !== "secretary");
+      setSecretaryName(secretaryName);
+    });
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -39,6 +54,12 @@ export default function SettingsScreen() {
   return (
     <div style={{ padding: 16, paddingBottom: 28 }}>
       <h1 style={{ fontSize: 19, fontWeight: 700, color: colors.textPrimary, margin: "0 0 16px" }}>{tr("settings.title")}</h1>
+
+      {!isOwner && secretaryName && (
+        <p style={{ margin: "-8px 0 16px", fontSize: 12.5, color: colors.textSecondary, background: colors.surfaceMuted, padding: "8px 10px", borderRadius: radius.sm }}>
+          {tr("settings.signedInAsSecretary", { name: secretaryName })}
+        </p>
+      )}
 
       <section>
         <SectionLabel style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -84,9 +105,21 @@ export default function SettingsScreen() {
         <Card style={{ padding: 4 }}>
           <SettingsRow icon={<CrownIcon size={18} />} tone="amber" label={tr("settings.manageSubscription")} onClick={() => navigate("/subscription")} first />
           <SettingsRow icon={<StoreIcon size={18} />} tone="primary" label={tr("shopProfile.title")} onClick={() => navigate("/settings/shop-profile")} />
+          {isOwner && (
+            <SettingsRow icon={<UsersIcon size={18} />} tone="purple" label={tr("settings.secretaries")} onClick={() => navigate("/settings/secretaries")} />
+          )}
           <SettingsRow icon={<SwapIcon size={18} />} tone="purple" label={tr("settings.currencyConverter")} onClick={() => navigate("/tools/currency-converter")} />
           <SettingsRow icon={<LockIcon size={18} />} tone="primary" label={tr("settings.changePassword")} onClick={() => navigate("/settings/change-password")} />
           <SettingsRow icon={<LogOutIcon size={18} />} tone="danger" label={tr("settings.logout")} onClick={handleLogout} />
+        </Card>
+      </section>
+
+      <section style={{ marginTop: 22 }}>
+        <SectionLabel>{tr("settings.legalSection")}</SectionLabel>
+        <Card style={{ padding: 4 }}>
+          <SettingsRow icon={<InfoIcon size={18} />} tone="primary" label={tr("settings.about")} onClick={() => navigate("/legal/about")} first />
+          <SettingsRow icon={<DocumentIcon size={18} />} tone="purple" label={tr("settings.terms")} onClick={() => navigate("/legal/terms")} />
+          <SettingsRow icon={<ShieldIcon size={18} />} tone="amber" label={tr("settings.privacy")} onClick={() => navigate("/legal/privacy")} />
         </Card>
       </section>
     </div>

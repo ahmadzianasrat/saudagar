@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { getCurrentUserId } from "../../lib/authSession";
+import { getShopContext } from "../../lib/authSession";
 import { useSubscriptionStatus } from "../../lib/useSubscriptionStatus";
 import { useTranslation } from "../../i18n/useTranslation";
 import { colors, inputStyle, primaryButtonStyle, radius, secondaryButtonStyle, shadow } from "../../theme";
@@ -36,7 +36,7 @@ export default function SubscriptionScreen() {
   const [manualSubmitted, setManualSubmitted] = useState(false);
 
   useEffect(() => {
-    getCurrentUserId().then((id) => setProfileId(id ?? undefined));
+    getShopContext().then(({ shopProfileId }) => setProfileId(shopProfileId ?? undefined));
 
     // HesabPay redirects back here after checkout — actual confirmation
     // comes from the webhook independently, so this redirect is purely

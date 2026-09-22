@@ -1,12 +1,13 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "../i18n/useTranslation";
 import { colors, shadow } from "../theme";
-import { HomeIcon, BoxIcon, TrendingIcon, SettingsIcon } from "./icons";
+import { HomeIcon, BoxIcon, TrendingIcon, ChartIcon, SettingsIcon } from "./icons";
 
 const TABS = [
   { path: "/ledger", labelKey: "nav.ledger", Icon: HomeIcon },
   { path: "/inventory", labelKey: "nav.inventory", Icon: BoxIcon },
   { path: "/prices", labelKey: "nav.prices", Icon: TrendingIcon },
+  { path: "/reports", labelKey: "nav.reports", Icon: ChartIcon },
   { path: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
 

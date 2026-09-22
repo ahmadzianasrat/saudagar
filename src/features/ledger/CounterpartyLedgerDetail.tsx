@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { enqueueWrite, getSyncStatus, cachedQuery, SAUDAGAR_SYNCED_EVENT } from "../../lib/offlineQueue";
-import { getCurrentUserId } from "../../lib/authSession";
+import { getShopContext } from "../../lib/authSession";
 import { generateClientId } from "../../lib/uuid";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { phoneToSyntheticEmail } from "../../lib/authHelpers";
@@ -45,11 +45,17 @@ export default function CounterpartyLedgerDetail() {
   const { tr } = useTranslation();
 
   const [profileId, setProfileId] = useState<string | null>(null);
+  // Editing a contact, editing/deleting an entry, and Settle Account
+  // are owner-only — RLS enforces this regardless (see
+  // migrations/020_shop_secretaries.sql), this just keeps a secretary
+  // from seeing buttons that would fail.
+  const [isOwner, setIsOwner] = useState(true);
   const [contact, setContact] = useState<ContactProfile | null>(null);
   // `null` = not loaded yet, distinct from `[]` = loaded and empty —
   // avoids flashing the empty-state message before real data arrives.
   const [entries, setEntries] = useState<LedgerEntry[] | null>(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
+  const [submittingEntry, setSubmittingEntry] = useState(false);
   const [entryType, setEntryType] = useState<"credit" | "debit">("credit");
   const [amount, setAmount] = useState("");
   // Deliberately starts empty (not "AFN") — a contact can hold both
@@ -96,8 +102,9 @@ export default function CounterpartyLedgerDetail() {
   const [showAccountReceipt, setShowAccountReceipt] = useState(false);
 
   useEffect(() => {
-    getCurrentUserId().then((id) => {
-      if (id) setProfileId(id);
+    getShopContext().then(({ shopProfileId, role }) => {
+      if (shopProfileId) setProfileId(shopProfileId);
+      setIsOwner(role === "owner");
     });
   }, []);
 
@@ -183,45 +190,55 @@ export default function CounterpartyLedgerDetail() {
       setError(tr("ledger.selectCurrencyRequired"));
       return;
     }
+    // Guards against duplicate entries from a fast double-tap or a
+    // slow connection — without this, each tap queued its own write
+    // (the queue itself has no idea two taps meant the same entry).
+    if (submittingEntry) return;
+    setSubmittingEntry(true);
     setError(null);
 
-    const clientId = generateClientId();
-    await enqueueWrite("ledger_entries", clientId, {
-      client_id: clientId,
-      profile_id: profileId,
-      counterparty_id: counterpartyId,
-      entry_type: entryType,
-      amount: Number(amount),
-      currency: entryCurrency,
-      note: note || null,
-      entry_date: new Date().toISOString(),
-    });
-
-    // enqueueWrite now awaits the actual sync attempt (see
-    // offlineQueue.ts) — re-check status immediately instead of
-    // hardcoding "pending", so the indicator is correct without
-    // needing a page reload.
-    const syncStatus = await getSyncStatus(clientId);
-
-    setEntries((prev) => [
-      {
-        id: clientId,
+    try {
+      const clientId = generateClientId();
+      await enqueueWrite("ledger_entries", clientId, {
         client_id: clientId,
+        profile_id: profileId,
+        counterparty_id: counterpartyId,
         entry_type: entryType,
         amount: Number(amount),
         currency: entryCurrency,
-        note,
+        note: note || null,
         entry_date: new Date().toISOString(),
-        syncStatus,
-      },
-      ...(prev ?? []),
-    ]);
+      });
 
-    setAmount("");
-    setEntryCurrency("");
-    setNote("");
-    setShowNewEntry(false);
-    setPage(1);
+      // enqueueWrite no longer waits on the network (see
+      // offlineQueue.ts) — it resolves as soon as the entry is saved
+      // locally, so this reads back "pending" immediately and flips
+      // to "synced" shortly after via the SAUDAGAR_SYNCED_EVENT
+      // listener above once the background sync actually lands.
+      const syncStatus = await getSyncStatus(clientId);
+
+      setEntries((prev) => [
+        {
+          id: clientId,
+          client_id: clientId,
+          entry_type: entryType,
+          amount: Number(amount),
+          currency: entryCurrency,
+          note,
+          entry_date: new Date().toISOString(),
+          syncStatus,
+        },
+        ...(prev ?? []),
+      ]);
+
+      setAmount("");
+      setEntryCurrency("");
+      setNote("");
+      setShowNewEntry(false);
+      setPage(1);
+    } finally {
+      setSubmittingEntry(false);
+    }
   }
 
   async function handleSaveContact(e: FormEvent) {
@@ -323,11 +340,19 @@ export default function CounterpartyLedgerDetail() {
         return;
       }
 
-      const { error: deleteError } = await supabase
+      // Scoped to the currently selected currency filter — "Both"
+      // settles everything for this contact same as before; AFN/PKR
+      // settles only that currency's entries, leaving the other
+      // currency's running balance untouched.
+      let deleteQuery = supabase
         .from("ledger_entries")
         .delete()
         .eq("counterparty_id", counterpartyId)
         .eq("profile_id", userData.user.id);
+      if (viewFilter !== "both") {
+        deleteQuery = deleteQuery.eq("currency", viewFilter);
+      }
+      const { error: deleteError } = await deleteQuery;
 
       if (deleteError) {
         console.error("failed to settle account:", deleteError);
@@ -336,7 +361,7 @@ export default function CounterpartyLedgerDetail() {
         return;
       }
 
-      setEntries([]);
+      setEntries((prev) => (viewFilter === "both" ? [] : (prev ?? []).filter((e) => e.currency !== viewFilter)));
       setSettleSuccess(true);
       setSettlePassword("");
       setTimeout(() => {
@@ -388,12 +413,14 @@ export default function CounterpartyLedgerDetail() {
             )}
             {contact.address && <div style={{ fontSize: 12.5, color: colors.textFaint, marginTop: 2 }}>{contact.address}</div>}
           </div>
-          <button
-            onClick={() => setEditingContact(true)}
-            style={{ width: 32, height: 32, borderRadius: radius.pill, border: "none", background: colors.primarySoft, color: colors.primary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-          >
-            <PencilIcon size={14} />
-          </button>
+          {isOwner && (
+            <button
+              onClick={() => setEditingContact(true)}
+              style={{ width: 32, height: 32, borderRadius: radius.pill, border: "none", background: colors.primarySoft, color: colors.primary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+            >
+              <PencilIcon size={14} />
+            </button>
+          )}
         </Card>
       )}
 
@@ -455,12 +482,12 @@ export default function CounterpartyLedgerDetail() {
         );
       })}
 
-      {entries !== null && entries.length > 0 && (
+      {isOwner && filteredEntries.length > 0 && (
         <button
           onClick={() => setShowSettleModal(true)}
           style={{ display: "block", margin: "4px auto 0", background: "none", border: "none", color: colors.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}
         >
-          {tr("ledger.settleAccount")}
+          {viewFilter === "both" ? tr("ledger.settleAccount") : `${tr("ledger.settleAccount")} (${currencyLabel(viewFilter)})`}
         </button>
       )}
 
@@ -504,7 +531,9 @@ export default function CounterpartyLedgerDetail() {
               </select>
             </div>
             <input placeholder={tr("ledger.note")} value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
-            <button type="submit" style={primaryButtonStyle}>{tr("ledger.save")}</button>
+            <button type="submit" disabled={submittingEntry} style={{ ...primaryButtonStyle, opacity: submittingEntry ? 0.65 : 1 }}>
+              {submittingEntry ? tr("common.saving") : tr("ledger.save")}
+            </button>
           </form>
         </Card>
       )}
@@ -546,12 +575,14 @@ export default function CounterpartyLedgerDetail() {
                           {entry.syncStatus === "synced" ? tr("ledger.synced") : tr("ledger.pending")}
                         </div>
                       </div>
-                      <button
-                        onClick={() => startEditEntry(entry)}
-                        style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                      >
-                        <PencilIcon size={13} />
-                      </button>
+                      {isOwner && (
+                        <button
+                          onClick={() => startEditEntry(entry)}
+                          style={{ width: 28, height: 28, borderRadius: radius.pill, border: "none", background: colors.surfaceMuted, color: colors.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                        >
+                          <PencilIcon size={13} />
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -613,11 +644,15 @@ export default function CounterpartyLedgerDetail() {
               <div style={{ width: 40, height: 40, borderRadius: radius.pill, background: colors.dangerSoft, color: colors.danger, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <AlertIcon size={20} />
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: colors.textPrimary }}>{tr("ledger.settleAccount")}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.textPrimary }}>
+                {viewFilter === "both" ? tr("ledger.settleAccount") : `${tr("ledger.settleAccount")} (${currencyLabel(viewFilter)})`}
+              </div>
             </div>
 
             <p style={{ fontSize: 13, color: colors.textSecondary, margin: "0 0 14px" }}>
-              {tr("ledger.settleWarning")} {hasAnyPkr ? tr("ledger.settleWarningBothCurrencies") : ""}
+              {viewFilter === "both"
+                ? <>{tr("ledger.settleWarning")} {hasAnyPkr ? tr("ledger.settleWarningBothCurrencies") : ""}</>
+                : tr("ledger.settleWarningScoped", { currency: currencyLabel(viewFilter) })}
             </p>
 
             {settleSuccess ? (
@@ -703,13 +738,34 @@ export default function CounterpartyLedgerDetail() {
             .join("  /  ")}
           filename={`account-statement-${contact.name.replace(/\s+/g, "-").toLowerCase()}`}
           whatsappText={
-            `${shopProfile.shop_name} — ${tr("receipt.accountStatement")}\n${contact.name}\n` +
+            `${tr("receipt.summaryFor", { name: contact.name })}\n\n` +
             visibleCurrencies
-              .map((c) => {
-                const t = totalsFor(c);
-                return `${currencyLabel(c)}: ${tr("ledger.given")} ${formatNumber(t.given)}, ${tr("ledger.received")} ${formatNumber(t.received)}, ${tr("ledger.totalBalance")} ${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))}`;
+              .map((currency) => {
+                const chronological = filteredEntries
+                  .filter((e) => e.currency === currency)
+                  .slice()
+                  .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+
+                let running = 0;
+                const lines = chronological.map((e) => {
+                  const signed = e.entry_type === "credit" ? e.amount : -e.amount;
+                  running += signed;
+                  const sym = currencyLabel(currency, "symbol");
+                  return `${formatDate(e.entry_date, dateSystem, digitStyle)} — ${e.entry_type === "credit" ? tr("ledger.given") : tr("ledger.received")}: ${signed >= 0 ? "+" : "-"}${formatNumber(Math.abs(signed))}${sym} (${tr("receipt.remainingInline")}: ${formatNumber(running)}${sym})`;
+                });
+
+                const t = totalsFor(currency);
+                const sym = currencyLabel(currency, "symbol");
+                const header = visibleCurrencies.length > 1 ? `${currencyLabel(currency)}\n` : "";
+                return (
+                  header +
+                  lines.join("\n") +
+                  (lines.length > 0 ? "\n\n" : "") +
+                  `${tr("receipt.currentBalance")}: ${t.balance < 0 ? "-" : ""}${formatNumber(Math.abs(t.balance))}${sym}`
+                );
               })
-              .join("\n")
+              .join("\n\n") +
+            `\n\n${tr("receipt.pleaseConfirm")}`
           }
           whatsappPhone={contact.whatsapp_number || contact.phone_number}
         />

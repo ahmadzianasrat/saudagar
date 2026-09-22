@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { fetchShopProfile } from "../../lib/shopProfile";
+import { getShopContext } from "../../lib/authSession";
 import { normalizeAfghanPhone } from "../../lib/phone";
 import { useTranslation } from "../../i18n/useTranslation";
 import { colors, inputStyle, primaryButtonStyle, radius } from "../../theme";
@@ -25,8 +26,14 @@ export default function ShopProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Only the owner can edit the shop profile — RLS enforces this
+  // regardless (profiles.update stays owner-only, see
+  // migrations/020_shop_secretaries.sql); this is just so a
+  // secretary sees a read-only screen instead of a save that fails.
+  const [isOwner, setIsOwner] = useState(true);
 
   useEffect(() => {
+    getShopContext().then(({ role }) => setIsOwner(role !== "secretary"));
     fetchShopProfile().then((profile) => {
       if (profile) {
         setOwnerName(profile.owner_name);
@@ -95,16 +102,22 @@ export default function ShopProfileScreen() {
         <p style={{ color: colors.success, fontSize: 13, background: colors.successSoft, padding: "8px 10px", borderRadius: radius.sm }}>{tr("shopProfile.saved")}</p>
       )}
 
+      {!isOwner && (
+        <p style={{ color: colors.textSecondary, fontSize: 12.5, background: colors.surfaceMuted, padding: "8px 10px", borderRadius: radius.sm }}>
+          {tr("shopProfile.ownerOnly")}
+        </p>
+      )}
+
       {!loading && (
         <Card>
           <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.ownerName")}</label>
-              <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} required style={inputStyle} />
+              <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} required disabled={!isOwner} style={{ ...inputStyle, opacity: isOwner ? 1 : 0.6 }} />
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.shopName")}</label>
-              <input value={shopName} onChange={(e) => setShopName(e.target.value)} required style={inputStyle} />
+              <input value={shopName} onChange={(e) => setShopName(e.target.value)} required disabled={!isOwner} style={{ ...inputStyle, opacity: isOwner ? 1 : 0.6 }} />
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.mobileNumber")}</label>
@@ -113,15 +126,17 @@ export default function ShopProfileScreen() {
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.whatsappNumber")}</label>
-              <input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} inputMode="tel" style={inputStyle} />
+              <input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} inputMode="tel" disabled={!isOwner} style={{ ...inputStyle, opacity: isOwner ? 1 : 0.6 }} />
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.address")}</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+              <input value={address} onChange={(e) => setAddress(e.target.value)} disabled={!isOwner} style={{ ...inputStyle, opacity: isOwner ? 1 : 0.6 }} />
             </div>
-            <button type="submit" disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1 }}>
-              {saving ? "…" : tr("shopProfile.save")}
-            </button>
+            {isOwner && (
+              <button type="submit" disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1 }}>
+                {saving ? "…" : tr("shopProfile.save")}
+              </button>
+            )}
           </form>
         </Card>
       )}
