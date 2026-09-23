@@ -47,18 +47,84 @@ interface SaudagarDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<SaudagarDB>> | null = null;
 
-function getDB() {
+// How long opening the local database gets before every caller
+// (enqueueWrite, getSyncStatus, cacheGet/cacheSet) gives up rather
+// than hang forever. Needed after a real device report (Vivo phones
+// specifically): account creation worked fine, but the Save button
+// on Ledger/Inventory entries never came back — it just stayed
+// disabled indefinitely and nothing was ever written, even locally.
+// That path never touches the network at all (enqueueWrite writes to
+// IndexedDB first, network sync is fire-and-forget afterwards), so
+// the hang has to be in openDB() itself.
+//
+// Most likely mechanism: this schema bumped from version 1 to 2 (to
+// add the readCache store) in an earlier round. If a stale connection
+// to the v1 database is still open somewhere — a background tab, or
+// (more relevant on some OEM Android browsers, Vivo's stock browser
+// included) a previous PWA session the browser kept alive rather than
+// fully closing — the browser fires a `blocked` event and the version
+// upgrade transaction just sits there waiting for that old connection
+// to close, which `idb`'s openDB() never resolves or rejects on by
+// itself unless something actually closes it. Every other hang in
+// this app (auth session checks, table reads, the write-queue flush)
+// turned out to be a missing timeout on an operation with no built-in
+// one — this is the same pattern for IndexedDB's open call, which has
+// no timeout either.
+//
+// Fixed two ways: (1) a `blocking` handler on the connection so an
+// older open connection closes itself as soon as a newer version is
+// requested, instead of sitting there blocking the upgrade, and (2) a
+// hard timeout around the whole open so that even if something else
+// blocks it, every caller gets a real rejection — and therefore a
+// re-enabled Save button and a visible error — instead of hanging
+// forever with the button stuck and the entry silently never saved.
+const DB_OPEN_TIMEOUT_MS = 6000;
+
+function openSaudagarDB() {
+  return openDB<SaudagarDB>("saudagar-offline", 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) {
+        const store = db.createObjectStore("writeQueue", { keyPath: "id" });
+        store.createIndex("by-synced", "syncedFlag");
+      }
+      if (oldVersion < 2) {
+        db.createObjectStore("readCache", { keyPath: "key" });
+      }
+    },
+    // Fires on THIS connection when a newer version (e.g. a second
+    // tab/PWA instance updated and reopened) wants to open — close
+    // ourselves immediately so we don't become the stale connection
+    // blocking someone else, and so the next call here reopens fresh.
+    blocking() {
+      dbPromise = null;
+    },
+    // Fires if opening is itself stuck behind another connection that
+    // hasn't closed — nothing to actively do here (the timeout below
+    // is the real backstop), but clear the cached promise so a retry
+    // doesn't keep reusing this stuck attempt.
+    blocked() {
+      dbPromise = null;
+    },
+    terminated() {
+      dbPromise = null;
+    },
+  });
+}
+
+function getDB(): Promise<IDBPDatabase<SaudagarDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<SaudagarDB>("saudagar-offline", 2, {
-      upgrade(db, oldVersion) {
-        if (oldVersion < 1) {
-          const store = db.createObjectStore("writeQueue", { keyPath: "id" });
-          store.createIndex("by-synced", "syncedFlag");
-        }
-        if (oldVersion < 2) {
-          db.createObjectStore("readCache", { keyPath: "key" });
-        }
-      },
+    const openPromise = openSaudagarDB();
+    dbPromise = Promise.race([
+      openPromise,
+      new Promise<IDBPDatabase<SaudagarDB>>((_, reject) =>
+        setTimeout(() => reject(new Error("offlineQueue: opening local database timed out")), DB_OPEN_TIMEOUT_MS)
+      ),
+    ]).catch((err) => {
+      // Don't leave a rejected promise cached — the very next call
+      // (e.g. the user tapping Save again) should get a fresh attempt
+      // rather than instantly failing forever from a single timeout.
+      dbPromise = null;
+      throw err;
     });
   }
   return dbPromise;

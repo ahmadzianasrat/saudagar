@@ -7,7 +7,7 @@ import CounterpartyLedgerDetail from "./features/ledger/CounterpartyLedgerDetail
 import InventoryHome from "./features/inventory/InventoryHome";
 import PricesHome from "./features/prices/PricesHome";
 import SubscriptionScreen from "./features/subscription/SubscriptionScreen";
-import RequestAccessScreen from "./features/profile/RequestAccessScreen";
+import SignupScreen from "./features/auth/SignupScreen";
 import LoginScreen from "./features/auth/LoginScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import ChangePasswordScreen from "./features/settings/ChangePasswordScreen";
@@ -25,7 +25,7 @@ import { WalletIcon } from "./components/icons";
 
 export default function App() {
   const { session, isAuthenticated, loading } = useAuth();
-  const [showRequestAccess, setShowRequestAccess] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
   // The shop's own profile id, not necessarily session.user.id — a
   // secretary login (see migrations/020_shop_secretaries.sql) has a
   // different auth id than the shop's subscription is filed under.
@@ -61,12 +61,12 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    if (showRequestAccess) {
-      return <RequestAccessScreen onBack={() => setShowRequestAccess(false)} />;
+    if (showSignup) {
+      return <SignupScreen onBack={() => setShowSignup(false)} onSignedUp={() => setShowSignup(false)} />;
     }
     return (
       <div style={{ minHeight: "100vh", background: colors.bg }}>
-        <LoginScreen onLoggedIn={() => {}} onRequestAccess={() => setShowRequestAccess(true)} />
+        <LoginScreen onLoggedIn={() => {}} onRequestAccess={() => setShowSignup(true)} />
       </div>
     );
   }

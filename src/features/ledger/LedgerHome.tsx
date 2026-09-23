@@ -337,6 +337,12 @@ export default function LedgerHome() {
       setQuickContactId("");
       setEntriesPage(1);
       setShowQuickEntry(false);
+    } catch (err) {
+      // See offlineQueue.ts — opening the local database can now
+      // reject (with a timeout) instead of hanging forever, so this
+      // can throw. Surface it rather than leaving the button stuck.
+      console.error("failed to save ledger entry:", err);
+      setError(tr("common.couldntSaveRetry"));
     } finally {
       setSubmittingQuickEntry(false);
     }

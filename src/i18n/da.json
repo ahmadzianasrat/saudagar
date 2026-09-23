@@ -44,7 +44,7 @@
   "auth.password": "رمز عبور",
   "auth.loginButton": "ورود",
   "auth.incorrect": "شماره تلفن یا رمز عبور نادرست است.",
-  "auth.newHere": "تازه وارد هستید؟ درخواست دسترسی کنید",
+  "auth.newHere": "تازه وارد هستید؟ یک حساب بسازید",
   "auth.loading": "در حال بارگذاری…",
   "onboarding.requestAccess": "درخواست دسترسی",
   "onboarding.ownerName": "نام مالک",
@@ -248,5 +248,15 @@
   "reports.entries": "ورودی",
   "reports.topContacts": "فعال‌ترین مخاطبین",
   "reports.topCommodities": "پرکاربردترین کالاها",
-  "reports.noActivity": "در این دوره فعالیتی وجود ندارد."
+  "reports.noActivity": "در این دوره فعالیتی وجود ندارد.",
+  "auth.createAccount": "ایجاد حساب",
+  "auth.createAccountButton": "ایجاد حساب",
+  "auth.confirmPassword": "تکرار رمز عبور",
+  "auth.phoneInvalid": "یک شماره معتبر وارد کنید: 0، 0093 یا +93 و به دنبال آن 9 رقم.",
+  "auth.phoneTaken": "این شماره قبلاً ثبت شده است. لطفاً وارد شوید.",
+  "auth.passwordMismatch": "رمزهای عبور مطابقت ندارند.",
+  "auth.passwordTooShort": "رمز عبور باید حداقل 6 کاراکتر باشد.",
+  "auth.phoneFormatHint": "با 0، 0093 یا +93 شروع کنید و به دنبال آن 9 رقم بنویسید.",
+  "auth.signupSucceededLoginManually": "حساب ایجاد شد — لطفاً با رمز عبور جدید خود وارد شوید.",
+  "shopProfile.whatsappHint": "اگر شماره شخصی و شماره واتساپ شما متفاوت است، شماره واتساپ خود را اینجا اضافه کنید."
 }

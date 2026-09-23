@@ -127,6 +127,7 @@ export default function ShopProfileScreen() {
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.whatsappNumber")}</label>
               <input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} inputMode="tel" disabled={!isOwner} style={{ ...inputStyle, opacity: isOwner ? 1 : 0.6 }} />
+              <p style={{ fontSize: 10.5, color: colors.textFaint, margin: "4px 0 0" }}>{tr("shopProfile.whatsappHint")}</p>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: 5 }}>{tr("shopProfile.address")}</label>

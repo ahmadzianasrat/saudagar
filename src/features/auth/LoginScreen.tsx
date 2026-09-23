@@ -6,11 +6,15 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { colors, inputStyle, primaryButtonStyle, radius, shadow } from "../../theme";
 import { WalletIcon } from "../../components/icons";
 
-// "Phone-number + admin-created login": the shop owner never chooses
-// their own password or receives an OTP. An admin approves their
-// account_requests row (via admin-approve-account), which generates
-// a password and relays it manually (call/WhatsApp) — the owner just
-// enters their phone number and that password here.
+// Phone-number + password login, no OTP/SMS. Since account creation
+// is now self-serve (see SignupScreen.tsx / the self-signup Edge
+// Function) the owner chose this password themselves at signup — the
+// old "admin approves and relays a generated password over WhatsApp"
+// flow is gone. phoneToSyntheticEmail() normalizes whatever format
+// the phone was typed in (leading "0", "0093", or "+93", all
+// followed by 9 digits) to the same login identifier regardless of
+// which of those three the owner types here, so it doesn't have to
+// match how they originally typed it at signup.
 export default function LoginScreen({
   onLoggedIn,
   onRequestAccess,
@@ -90,13 +94,16 @@ export default function LoginScreen({
             {error}
           </p>
         )}
-        <input
-          placeholder={tr("auth.phoneNumber")}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          inputMode="tel"
-          style={inputStyle}
-        />
+        <div>
+          <input
+            placeholder={tr("auth.phoneNumber")}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            inputMode="tel"
+            style={inputStyle}
+          />
+          <p style={{ fontSize: 10.5, color: colors.textFaint, margin: "4px 2px 0" }}>{tr("auth.phoneFormatHint")}</p>
+        </div>
         <input
           placeholder={tr("auth.password")}
           type="password"

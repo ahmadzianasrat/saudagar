@@ -500,3 +500,37 @@ Reported with screenshots: reading now works offline (round 24 fixed that), but 
 - [ ] Test: revoke a secretary, confirm their next login/request returns empty/denied everywhere.
 - [ ] Test: a secretary can change their own password from Settings.
 - [ ] Test the Reports screen's three periods against a shop with real ledger + inventory history, in both languages.
+
+---
+
+## 29. Self-serve signup, format-flexible login, WhatsApp-number hint, and the Vivo "Save button never comes back" bug
+
+### 1. Self-serve account creation (no more admin approval / WhatsApp-relayed password)
+- [x] New `SignupScreen.tsx` replaces `RequestAccessScreen.tsx` (deleted, along with the now-unused `account_requests`-insert flow it drove from the app side — the table and the admin panel's approval screen are left in place untouched, in case a manual override is ever still wanted, but the app no longer writes to it). Just three fields: phone number, password, confirm password.
+- [x] New public `self-signup` Edge Function does the actual creation: validates the phone (must normalize to a clean 9-digit `+93XXXXXXXXX`) and password (min 6 chars), checks `profiles` for that phone already existing, creates the auth user via `admin.createUser({ email_confirm: true })` (same synthetic-email approach `admin-approve-account` already used — see that function's comments for why this can't just be a client-side `supabase.auth.signUp()`), inserts the `profiles` row with `status: 'active'` immediately (no approval step left to gate on) and an empty `owner_name`/`shop_name` (filled in later via Settings → Shop Profile), and creates the first 30-day trial subscription — all in one call. Cleans up the orphaned auth user if the profile insert fails, so a failed signup doesn't permanently squat a phone number.
+- [x] Deliberately public/unauthenticated (this IS the new account-creation entry point) — called with the project's anon key as the bearer token from the client rather than `supabase.functions.invoke`, since there's no user session yet to attach.
+- [x] New migration `021_self_signup.sql`: `profiles.owner_name`/`shop_name` get a `default ''` so the insert above (which omits them) still satisfies the existing `not null` constraint. Nothing else about those columns changes.
+- [x] On success, `SignupScreen` immediately calls `signInWithPassword` with the same credentials and drops the owner straight into the app — no separate "check back later" step.
+
+### 2. Login already accepted 0 / 0093 / +93 — now validated and hinted explicitly
+- [x] Turns out `normalizeAfghanPhone()` (from the currency-per-entry round) already normalizes any of `0`/`0093`/`+93` + 9 digits to the same canonical form before deriving the login email, so typing a different prefix than you registered with already worked. What was missing was validation and a visible hint — added `isValidAfghanPhone()`-backed validation to the new Signup screen (rejects a malformed number before ever calling the Edge Function) and a small format hint (`auth.phoneFormatHint`) under the phone field on both Login and Signup.
+
+### 3. Shop Profile: hint for a separate WhatsApp number
+- [x] One line under the WhatsApp field in Settings → Shop Profile: if the owner's personal number and WhatsApp number are different, add the WhatsApp one here. (The field itself already existed from an earlier round for receipts — this just explains when to use it.)
+
+### 4. Ledger/Inventory Save button hanging forever on some devices (reported on Vivo specifically)
+- [x] **Root cause:** `enqueueWrite()`/`getSyncStatus()` open the local IndexedDB via `getDB()`, which had no timeout — the same missing-timeout pattern behind essentially every other bug in this project, just never caught here because it's a local database call, not a network one, so it was easy to assume it couldn't hang. It can: this DB's schema version was bumped 1 → 2 (round 24, adding the `readCache` store) without a `blocked`/`blocking` handler, so if a stale connection to the old version is still open somewhere — a background tab, or (plausibly the actual trigger here) a previous PWA session some Android WebViews, Vivo's stock browser included, keep alive rather than fully tearing down — the version-upgrade transaction just sits there waiting for that old connection to close, and `idb`'s `openDB()` never resolves or rejects on its own. Since account creation doesn't touch this database at all but every ledger/inventory write does, this matches the report exactly: account creation worked, the Save button on an entry just never came back.
+- [x] Fixed in `offlineQueue.ts`: `getDB()` now races the open against a 6s timeout, and the connection has `blocking`/`blocked`/`terminated` handlers that clear the cached open-promise so a stuck or superseded connection doesn't wedge every future call too — a retry (e.g. the owner tapping Save again) gets a fresh attempt instead of reusing the same stuck one.
+- [x] `handleAddEntry` (Ledger, both the quick-entry and per-contact forms) and `handleAddTransaction` (Inventory) already had a `finally` resetting their submitting flag, which is why a plain rejection wasn't enough on its own before — a hang before this fix meant `finally` never even ran. Now that `getDB()` can actually reject, added a `catch` alongside the existing `finally` in all three so a failure shows `common.couldntSaveRetry` instead of the button just silently re-enabling with the entry unexplained-missing.
+- [ ] Not done: this is a strong, well-reasoned root-cause fix (and a legitimate bug regardless of whether it's the exact Vivo mechanism — no IndexedDB open in this app had a timeout before this), but it hasn't been reproduced on an actual Vivo device. Worth confirming Save now either succeeds or shows a clear error on the device(s) that showed the original problem.
+
+---
+
+## To run before deploying this round
+- [ ] **Run migration `021_self_signup.sql`** against the database.
+- [ ] **Deploy 1 new Edge Function**: `self-signup` (public — no `--no-verify-jwt` needed; the client authenticates the call with the anon key, which is itself a valid signed JWT, so it passes the gateway's default JWT check without exposing anything admin-only).
+- [ ] Test: sign up with a fresh phone number in each of the three formats (`0793111222`, `0093793111222`, `+93793111222`) typed at signup, and confirm logging back in works typing a *different* one of the three than was used at signup.
+- [ ] Test: sign up twice with the same phone number — second attempt should show "already registered", not a generic error or a silently-overwritten account.
+- [ ] Test: password/confirm-password mismatch and a too-short password both show a clear message and don't call the Edge Function.
+- [ ] Test on a device that previously showed the Save-button-hangs-forever symptom (Vivo, if available): add a ledger entry and an inventory transaction; Save should now either complete normally or show a visible error within a few seconds — never stay stuck indefinitely.
+- [ ] Test the WhatsApp hint text renders correctly in all three languages in Settings → Shop Profile.

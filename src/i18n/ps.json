@@ -44,7 +44,7 @@
   "auth.password": "پټ نوم",
   "auth.loginButton": "ننوتل",
   "auth.incorrect": "د تلیفون شمېره یا پټ نوم غلط دی.",
-  "auth.newHere": "نوی یاست؟ د لاسرسي غوښتنه وکړئ",
+  "auth.newHere": "نوی یاست؟ حساب جوړ کړئ",
   "auth.loading": "پرانيستل کېږي…",
   "onboarding.requestAccess": "د لاسرسي غوښتنه",
   "onboarding.ownerName": "د مالک نوم",
@@ -248,5 +248,15 @@
   "reports.entries": "ليکنې",
   "reports.topContacts": "ترټولو فعال اړیکې",
   "reports.topCommodities": "ترټولو فعال توکي",
-  "reports.noActivity": "پدې موده کې هیڅ فعالیت نشته."
+  "reports.noActivity": "پدې موده کې هیڅ فعالیت نشته.",
+  "auth.createAccount": "حساب جوړول",
+  "auth.createAccountButton": "حساب جوړول",
+  "auth.confirmPassword": "پټ نوم تایید کړئ",
+  "auth.phoneInvalid": "سمه تلیفون شمېره ولیکئ: 0، 0093 یا +93 چې وروسته یې 9 عددونه وي.",
+  "auth.phoneTaken": "دا شمېره مخکې ثبت شوې ده. مهرباني وکړئ ننوتل وکړئ.",
+  "auth.passwordMismatch": "پټ نومونه سره نه ورته دي.",
+  "auth.passwordTooShort": "پټ نوم باید لږ تر لږه 6 توري ولري.",
+  "auth.phoneFormatHint": "د 0، 0093 یا +93 سره پیل کړئ، وروسته یې 9 عددونه.",
+  "auth.signupSucceededLoginManually": "حساب جوړ شو — مهرباني وکړئ په خپل نوي پټ نوم سره ننوځئ.",
+  "shopProfile.whatsappHint": "که ستاسو شخصي شمېره او د واټساپ شمېره سره توپیر لري، خپله د واټساپ شمېره دلته زیاته کړئ."
 }

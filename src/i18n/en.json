@@ -44,7 +44,7 @@
   "auth.password": "Password",
   "auth.loginButton": "Log In",
   "auth.incorrect": "Phone number or password is incorrect.",
-  "auth.newHere": "New here? Request access",
+  "auth.newHere": "New here? Create an account",
   "auth.loading": "Loading…",
   "onboarding.requestAccess": "Request Access",
   "onboarding.ownerName": "Owner name",
@@ -248,5 +248,15 @@
   "reports.entries": "entries",
   "reports.topContacts": "Most active contacts",
   "reports.topCommodities": "Most active commodities",
-  "reports.noActivity": "No activity in this period."
+  "reports.noActivity": "No activity in this period.",
+  "auth.createAccount": "Create Account",
+  "auth.createAccountButton": "Create Account",
+  "auth.confirmPassword": "Confirm Password",
+  "auth.phoneInvalid": "Enter a valid phone number: 0, 0093, or +93 followed by 9 digits.",
+  "auth.phoneTaken": "This phone number is already registered. Try logging in instead.",
+  "auth.passwordMismatch": "Passwords don't match.",
+  "auth.passwordTooShort": "Password must be at least 6 characters.",
+  "auth.phoneFormatHint": "Start with 0, 0093, or +93, followed by 9 digits.",
+  "auth.signupSucceededLoginManually": "Account created — please log in with your new password.",
+  "shopProfile.whatsappHint": "If your personal number and WhatsApp number are different, add your WhatsApp number here."
 }

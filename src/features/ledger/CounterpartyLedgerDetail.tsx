@@ -236,6 +236,13 @@ export default function CounterpartyLedgerDetail() {
       setNote("");
       setShowNewEntry(false);
       setPage(1);
+    } catch (err) {
+      // enqueueWrite/getSyncStatus can now reject (e.g. the local
+      // database timing out to open — see offlineQueue.ts) instead of
+      // hanging forever. Surface it instead of leaving the form as if
+      // nothing happened; the entry was NOT saved in this case.
+      console.error("failed to save ledger entry:", err);
+      setError(tr("common.couldntSaveRetry"));
     } finally {
       setSubmittingEntry(false);
     }

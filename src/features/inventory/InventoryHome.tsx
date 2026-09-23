@@ -520,6 +520,15 @@ export default function InventoryHome() {
     setTxPartyAddress("");
     setTxPage(1);
     setShowAddTransaction(null);
+    } catch (err) {
+      // See offlineQueue.ts — opening the local database can now
+      // reject (with a timeout) instead of hanging forever, which is
+      // what a real device report traced this to (Vivo phones
+      // specifically: the Save button never re-enabled and nothing
+      // was saved). Surface the failure instead of leaving the button
+      // stuck with no feedback.
+      console.error("failed to save inventory transaction:", err);
+      setError(tr("common.couldntSaveRetry"));
     } finally {
       setSubmittingTx(false);
     }
